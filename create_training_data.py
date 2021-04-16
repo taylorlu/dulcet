@@ -1,19 +1,20 @@
 import argparse
 from pathlib import Path
 import pickle
+import os
 from re import S
 import librosa
 import tensorflow as tf
 from tensorflow.core.framework.graph_pb2 import GraphDef
 import numpy as np
-from p_tqdm import p_uimap
+from tqdm import trange
+from concurrent.futures import ThreadPoolExecutor
 
 from utils.logging_utils import SummaryManager
 from data.text import TextToTokens
 from data.datasets import DataReader
 from utils.config_manager import Config
 from data.audio import Audio
-from data.text.symbols import _alphabet
 
 np.random.seed(42)
 
@@ -33,48 +34,55 @@ metadatareader = DataReader.from_config(cm, kind='original')
 summary_manager = SummaryManager(model=None, log_dir=cm.log_dir / 'data_preprocessing', config=cm.config,
                                  default_writer='data_preprocessing')
 print(f'\nFound {len(metadatareader.filenames)} wavfiles.')
+audio = Audio(config=cm.config)
 
 if not args.skip_mels:
-    
-    def process_wav(wav_tuple):
-        fullpath, data_type, _, _ = wav_tuple
-        file_name = fullpath.stem
-        _, trim_type = cm.data_type[data_type]
-        try:
-            y, sr = audio.load_wav(str(fullpath), trim_center_vad=trim_type=='trimcentervad')
-        except Exception as e:
-            return {'fname': file_name, 'mel.len': None}
-        mel = audio.mel_spectrogram(y)
-        assert mel.shape[1] == audio.config['mel_channels'], len(mel.shape) == 2
 
-        if(file_name.startswith('SSB')):
-            spk_name = file_name[:7]
-        elif(file_name.startswith('id')):
-            spk_name = file_name[:7]
-        else:
-            spk_name = file_name.split('_')[0]
-
-        mel_path = (cm.mel_dir / spk_name / file_name).with_suffix('.npy')
-        np.save(mel_path, mel)
-        return {'fname': file_name, 'mel.len': mel.shape[0]}
-    
-    print(f"\nMels will be stored stored under")
-    print(f"{cm.mel_dir}")
-    audio = Audio(config=cm.config)
-    wav_tuples = metadatareader.text_dict.values()
     len_dict = {}
     remove_files = []
     mel_lens = []
-    wav_iter = p_uimap(process_wav, wav_tuples)
-    for out_dict in wav_iter:
-        if(out_dict['mel.len'] is None):
-            remove_files.append(out_dict['fname'])
-            continue
-        len_dict.update({out_dict['fname']: out_dict['mel.len']})
-        if out_dict['mel.len'] > cm.config['max_mel_len'] or out_dict['mel.len'] < cm.config['min_mel_len']:
-            remove_files.append(out_dict['fname'])
-        else:
-            mel_lens.append(out_dict['mel.len'])
+
+    def process_wav(wav_tuples):
+        for idx in trange(len(wav_tuples), desc=''):
+            fullpath, data_type, spk_name, _ = wav_tuples[idx]
+
+            file_name = fullpath.stem
+            _, trim_type = cm.data_type[data_type]
+            try:
+                y, sr = audio.load_wav(str(fullpath), trim_center_vad=trim_type=='trimcentervad')
+            except Exception as e:
+                remove_files.append(file_name)
+                continue
+            mel = audio.mel_spectrogram(y)
+            assert mel.shape[1] == audio.config['mel_channels'], len(mel.shape) == 2
+
+            len_dict.update({file_name: mel.shape[0]})
+            if mel.shape[0] > cm.config['max_mel_len'] or mel.shape[0] < cm.config['min_mel_len']:
+                remove_files.append(file_name)
+            else:
+                mel_lens.append(mel.shape[0])
+                os.makedirs(str(cm.mel_dir / spk_name), exist_ok=True)
+                mel_path = (cm.mel_dir / spk_name / file_name).with_suffix('.npy')
+                np.save(str(mel_path), mel)
+    
+    print(f"\nMels will be stored stored under")
+    print(f"{cm.mel_dir}")
+    
+    wav_tuples = list(metadatareader.text_dict.values())
+    len_dict = {}
+    remove_files = []
+    mel_lens = []
+
+    poolsize = 4
+    piecesize = len(wav_tuples)//poolsize
+    wav_inputs = []
+
+    for i in range(poolsize):
+        wav_inputs.append(wav_tuples[piecesize*i:piecesize*(i+1)])
+    wav_inputs[-1].extend(wav_tuples[piecesize*(i+1):])
+
+    with ThreadPoolExecutor() as p:
+        p.map(process_wav, wav_inputs)
 
     pickle.dump(len_dict, open(cm.data_dir / 'mel_len.pkl', 'wb'))
     pickle.dump(remove_files, open(cm.data_dir / 'under-over_sized_mels.pkl', 'wb'))
@@ -124,22 +132,38 @@ if not args.skip_phonemes:
                                      with_stress=cm.config['with_stress'],
                                      njobs=1)
     
-    def process_phonemes(file_id):
-        _, data_type, speaker, text = metadatareader.text_dict[file_id]
-        try:
-            language, _ = cm.data_type[data_type]
-            phon = text_proc.phonemizer(text, language=language)
-        except Exception as e:
-            print(f'{e}\nFile id {file_id}')
-            raise BrokenPipeError
-        return (file_id, speaker, phon)
+    def process_phonemes(file_ids):
+        phonemized_dict = {}
+        for idx in trange(len(file_ids), desc=''):
+            file_id = file_ids[idx]
+            _, data_type, speaker, text = metadatareader.text_dict[file_id]
+
+            try:
+                language, _ = cm.data_type[data_type]
+                phonemes = text_proc.phonemizer(text, language=language)
+            except Exception as e:
+                print(f'{e}\nFile id {file_id}')
+                continue
+
+            phonemized_dict.update({file_id: '|'.join([speaker, phonemes])})
+        return phonemized_dict
     
     print('\nPHONEMIZING')
     phonemized_data = {}
-    phon_iter = p_uimap(process_phonemes, metadata_file_ids)
-    for (file_id, speaker, phonemes) in phon_iter:
-        phonemized_data.update({file_id: '|'.join([speaker, phonemes])})
-    
+
+    poolsize = 4
+    piecesize = len(metadata_file_ids)//poolsize
+    metadata_file_inputs = []
+
+    for i in range(poolsize):
+        metadata_file_inputs.append(metadata_file_ids[piecesize*i:piecesize*(i+1)])
+    metadata_file_inputs[-1].extend(metadata_file_ids[piecesize*(i+1):])
+
+    with ThreadPoolExecutor() as p:
+        procs = p.map(process_phonemes, metadata_file_inputs)
+        for proc in procs:
+            phonemized_data.update(proc)
+
     print('\nPhonemized metadata samples:')
     for i in sample_items:
         print(f'{i}:{phonemized_data[i]}')

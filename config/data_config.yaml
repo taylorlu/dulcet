@@ -1,5 +1,5 @@
 audio_settings_name: MelGAN_default
-text_settings_name: NoStress_NoBreathing
+text_settings_name: NoStress
 
 # TRAINING DATA SETTINGS
 n_samples: 100000
