@@ -43,6 +43,7 @@ class Phonemizer:
         pinyin_lexicon_path = r'data\text\lexicon\pinyin-lexicon-r.txt'
         self.english_lexicon = self.read_lexicon(english_lexicon_path)
         self.pinyin_lexicon = self.read_lexicon(pinyin_lexicon_path)
+        self.g2p = G2p()
 
     def read_lexicon(self, lex_path):
         lexicon = {}
@@ -58,14 +59,13 @@ class Phonemizer:
     def preprocess_english(self, text):
         text = text.rstrip(punctuation)
 
-        g2p = G2p()
         phones = []
         words = re.split(r"([,;.\-\?\!\s+])", text)
         for w in words:
             if w.lower() in self.english_lexicon:
                 phones += self.english_lexicon[w.lower()]
             else:
-                phones += list(filter(lambda p: p != " ", g2p(w)))
+                phones += list(filter(lambda p: p != " ", self.g2p(w)))
         phones = "{" + "}{".join(phones) + "}"
         phones = re.sub(r"\{[^\w\s]?\}", "{sp}", phones)
         phones = phones.replace("}{", " ")
