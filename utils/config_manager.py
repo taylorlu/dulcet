@@ -5,15 +5,16 @@ from pathlib import Path
 import numpy as np
 import tensorflow as tf
 import ruamel.yaml
+import pickle
 
-from model.models import Aligner, ForwardTransformer
+from model.models import ASREncoder
 from utils.scheduling import reduction_schedule
 
 
 class Config:
-    def __init__(self, config_path: str, aligner=False):
-        if aligner:
-            model_kind = 'aligner'
+    def __init__(self, config_path: str, asr=False):
+        if asr:
+            model_kind = 'asr'
         else:
             model_kind = 'tts'
         self.config_path = Path(config_path)
@@ -22,12 +23,12 @@ class Config:
         self.config = self._load_config()
         self.git_hash = self._get_git_hash()
         self.data_name = self.config['data_name']  # raw data
-        aligner_config_name = Path(self.config['aligner_config']).stem
+        asr_config_name = Path(self.config['asr_config']).stem
         tts_config_name = Path(self.config['tts_config']).stem
         # make session names
         self.session_names = {'data': f"{self.config['text_settings_name']}.{self.config['audio_settings_name']}"}
-        self.session_names['aligner'] = f"{aligner_config_name}.{self.session_names['data']}"
-        self.session_names['tts'] = f"{tts_config_name}.{aligner_config_name}"
+        self.session_names['asr'] = f"{asr_config_name}.{self.session_names['data']}"
+        self.session_names['tts'] = f"{tts_config_name}.{asr_config_name}"
         # create paths
         self.wav_directory = self.config['wav_directory']
         self.data_type = self.config['data_type']
@@ -39,12 +40,25 @@ class Config:
         self.valid_metadata_path = self.data_dir / f"valid_metadata.{self.config['text_settings_name']}.txt"
         self.phonemized_metadata_path = self.data_dir / f"phonemized_metadata.{self.config['text_settings_name']}.txt"
         self.mel_dir = self.data_dir / f"mels.{self.config['audio_settings_name']}"
-        self.duration_dir = self.data_dir / f"durations.{self.session_names['aligner']}"
+        self.duration_dir = self.data_dir / f"durations.{self.session_names['asr']}"
+
+        mel_len_file = Path(self.data_dir) / 'mel_len.pkl'
+        if(mel_len_file.is_file()):
+            self.mel_len = pickle.load(open(mel_len_file, 'rb'))
+            speakers = set()
+
+            for key in self.mel_len:
+                if(key.startswith('SSB')):
+                    speakers.add(key[:7])
+                elif(key.startswith('BAC')):
+                    speakers.add(key[6:11])
+                else:
+                    speakers.add(key.split('_')[0])
+            speakers = sorted(list(speakers))
+            self.spk_dict = {k: v for v, k in enumerate(speakers)}
+
         # training parameters
         self.learning_rate = np.array(self.config['learning_rate_schedule'])[0, 1].astype(np.float32)
-        if model_kind == 'aligner':
-            self.max_r = np.array(self.config['reduction_factor_schedule'])[0, 1].astype(np.int32)
-            self.stop_scaling = self.config.get('stop_loss_scaling', 1.)
     
     def _load_config(self):
         all_config = {}
@@ -101,54 +115,48 @@ class Config:
     def get_model(self, ignore_hash=False):
         if not ignore_hash:
             self._check_hash()
-        if self.model_kind == 'aligner':
-            return Aligner(mel_channels=self.config['mel_channels'],
-                           encoder_model_dimension=self.config['encoder_model_dimension'],
-                           decoder_model_dimension=self.config['decoder_model_dimension'],
-                           encoder_num_heads=self.config['encoder_num_heads'],
-                           decoder_num_heads=self.config['decoder_num_heads'],
-                           encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
-                           decoder_feed_forward_dimension=self.config['decoder_feed_forward_dimension'],
-                           encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
-                           decoder_maximum_position_encoding=self.config['decoder_max_position_encoding'],
-                           decoder_prenet_dimension=self.config['decoder_prenet_dimension'],
-                           encoder_prenet_dimension=self.config['encoder_prenet_dimension'],
-                           dropout_rate=self.config['dropout_rate'],
-                           decoder_prenet_dropout=self.config['decoder_prenet_dropout'],
-                           max_r=self.max_r,
-                           mel_start_value=self.config['mel_start_value'],
-                           mel_end_value=self.config['mel_end_value'],
-                           phoneme_language=self.config['phoneme_language'],
-                           with_stress=self.config['with_stress'],
-                           debug=self.config['debug'])
+        if self.model_kind == 'asr':
+            return ASREncoder(mel_channels=self.config['mel_channels'],
+                              spk_count=len(self.spk_dict),
+                              encoder_model_dimension=self.config['encoder_model_dimension'],
+                              encoder_num_heads=self.config['encoder_num_heads'],
+                              encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
+                              encoder_prenet_dimension=self.config['encoder_prenet_dimension'],
+                              dropout_rate=self.config['dropout_rate'],
+                              encoder_dense_blocks=self.config['encoder_dense_blocks'],
+                              encoder_attention_conv_kernel=self.config['encoder_attention_conv_kernel'],
+                              encoder_attention_conv_filters=self.config['encoder_attention_conv_filters'],
+                              encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
+                              debug=self.config['debug'])
         
         else:
-            return ForwardTransformer(encoder_model_dimension=self.config['encoder_model_dimension'],
-                                      decoder_model_dimension=self.config['decoder_model_dimension'],
-                                      dropout_rate=self.config['dropout_rate'],
-                                      decoder_num_heads=self.config['decoder_num_heads'],
-                                      encoder_num_heads=self.config['encoder_num_heads'],
-                                      encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
-                                      decoder_maximum_position_encoding=self.config['decoder_max_position_encoding'],
-                                      encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
-                                      decoder_feed_forward_dimension=self.config['decoder_feed_forward_dimension'],
-                                      encoder_attention_conv_filters=self.config['encoder_attention_conv_filters'],
-                                      decoder_attention_conv_filters=self.config['decoder_attention_conv_filters'],
-                                      encoder_attention_conv_kernel=self.config['encoder_attention_conv_kernel'],
-                                      decoder_attention_conv_kernel=self.config['decoder_attention_conv_kernel'],
-                                      duration_conv_filters=self.config['duration_conv_filters'],
-                                      duration_kernel_size=self.config['duration_kernel_size'],
-                                      predictors_dropout=self.config['predictors_dropout'],
-                                      mel_channels=self.config['mel_channels'],
-                                      encoder_dense_blocks=self.config['encoder_dense_blocks'],
-                                      decoder_dense_blocks=self.config['decoder_dense_blocks'],
-                                      phoneme_language=self.config['phoneme_language'],
-                                      with_stress=self.config['with_stress'],
-                                      debug=self.config['debug'])
+            pass
+            # return ForwardTransformer(encoder_model_dimension=self.config['encoder_model_dimension'],
+            #                           decoder_model_dimension=self.config['decoder_model_dimension'],
+            #                           dropout_rate=self.config['dropout_rate'],
+            #                           decoder_num_heads=self.config['decoder_num_heads'],
+            #                           encoder_num_heads=self.config['encoder_num_heads'],
+            #                           encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
+            #                           decoder_maximum_position_encoding=self.config['decoder_max_position_encoding'],
+            #                           encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
+            #                           decoder_feed_forward_dimension=self.config['decoder_feed_forward_dimension'],
+            #                           encoder_attention_conv_filters=self.config['encoder_attention_conv_filters'],
+            #                           decoder_attention_conv_filters=self.config['decoder_attention_conv_filters'],
+            #                           encoder_attention_conv_kernel=self.config['encoder_attention_conv_kernel'],
+            #                           decoder_attention_conv_kernel=self.config['decoder_attention_conv_kernel'],
+            #                           duration_conv_filters=self.config['duration_conv_filters'],
+            #                           duration_kernel_size=self.config['duration_kernel_size'],
+            #                           predictors_dropout=self.config['predictors_dropout'],
+            #                           mel_channels=self.config['mel_channels'],
+            #                           encoder_dense_blocks=self.config['encoder_dense_blocks'],
+            #                           decoder_dense_blocks=self.config['decoder_dense_blocks'],
+            #                           phoneme_language=self.config['phoneme_language'],
+            #                           with_stress=self.config['with_stress'],
+            #                           debug=self.config['debug'])
     
     def compile_model(self, model):
-        if self.model_kind == 'aligner':
-            model._compile(stop_scaling=self.stop_scaling, optimizer=self.new_adam(self.learning_rate))
+        if self.model_kind == 'asr':
+            model._compile(optimizer=self.new_adam(self.learning_rate))
         else:
             model._compile(optimizer=self.new_adam(self.learning_rate))
     
@@ -203,7 +211,4 @@ class Config:
             ckpt.restore(manager.latest_checkpoint)
             if verbose:
                 print(f'restored weights from {manager.latest_checkpoint} at step {model.step}')
-        if self.model_kind == 'aligner':
-            reduction_factor = reduction_schedule(model.step, self.config['reduction_factor_schedule'])
-            model.set_constants(reduction_factor=reduction_factor)
         return model

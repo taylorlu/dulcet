@@ -11,7 +11,7 @@ from data.text.symbols import all_phonemes
 
 class Tokenizer:
     
-    def __init__(self, start_token='>', end_token='<', pad_token='/', add_start_end=True):
+    def __init__(self, start_token='>', end_token='<', pad_token='/', add_start_end=False):
         self.alphabet = all_phonemes
         self.idx_to_token = {i: s for i, s in enumerate(self.alphabet, start=1)}
         self.idx_to_token[0] = pad_token
@@ -26,7 +26,7 @@ class Tokenizer:
             self.idx_to_token[self.end_token_index] = end_token
     
     def __call__(self, sentence: str) -> list:
-        sequence = [self.token_to_idx[c] for c in sentence]  # No filtering: text should only contain known chars.
+        sequence = [self.token_to_idx[c] for c in sentence.split()]  # No filtering: text should only contain known chars.
         sequence = [item for items in sequence for item in items]
         if self.add_start_end:
             sequence = [self.start_token_index] + sequence + [self.end_token_index]

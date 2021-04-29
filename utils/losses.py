@@ -1,4 +1,5 @@
 import tensorflow as tf
+import math
 
 
 def new_scaled_crossentropy(index=2, scaling=1.0):
@@ -58,6 +59,42 @@ def masked_binary_crossentropy(targets: tf.Tensor, logits: tf.Tensor, mask_value
     loss_ = bc(targets, logits)
     loss_ *= mask
     return tf.reduce_mean(loss_)
+
+
+def ctc_loss(y_true, y_pred, input_length, label_length, blank=None):
+    return tf.nn.ctc_loss(
+        labels=tf.cast(y_true, tf.int32),
+        logit_length=tf.cast(input_length, tf.int32),
+        logits=tf.cast(y_pred, tf.float32),
+        label_length=tf.cast(label_length, tf.int32),
+        logits_time_major=False,
+        blank_index=blank
+    )
+
+
+def amsoftmax_loss(targets: tf.Tensor, embeddings: tf.Tensor, weights: tf.Tensor, spk_count: int, s=50.0, m=0.5) -> tf.Tensor:
+    weights = tf.nn.l2_normalize(weights, axis=0)
+
+    cos_m = math.cos(m)
+    sin_m = math.sin(m)
+
+    cos_theta = tf.matmul(embeddings, weights)
+    sin_theta = tf.sqrt(tf.subtract(1.0, tf.square(cos_theta)))
+    cos_m_theta = s * tf.subtract(tf.multiply(cos_theta, cos_m), tf.multiply(sin_theta, sin_m))
+
+    threshold = math.cos(math.pi - m)
+
+    cond_v = cos_theta - threshold
+    cond = tf.cast(tf.nn.relu(cond_v), dtype=tf.bool)
+    keep_val = s*(cos_theta - m*sin_m)
+    cos_m_theta_temp = tf.where(cond, cos_m_theta, keep_val)
+    mask = tf.one_hot(targets, depth=spk_count)
+    inv_mask = tf.subtract(1.0, mask)
+    s_cos_theta = tf.multiply(s, cos_theta)
+    logits = tf.add(tf.multiply(s_cos_theta, inv_mask), tf.multiply(cos_m_theta_temp, mask))
+
+    cce = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+    return cce(targets, logits)
 
 
 def weighted_sum_losses(targets, pred, loss_functions, coeffs):

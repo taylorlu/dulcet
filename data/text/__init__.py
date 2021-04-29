@@ -15,7 +15,7 @@ class TextToTokens:
         return tokens
     
     @classmethod
-    def default(cls, add_start_end: bool, with_stress: bool, njobs=1):
+    def default(cls, add_start_end: bool):
         phonemizer = Phonemizer()
         tokenizer = Tokenizer(add_start_end=add_start_end)
         return cls(phonemizer=phonemizer, tokenizer=tokenizer)

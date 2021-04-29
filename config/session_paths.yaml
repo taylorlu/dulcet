@@ -1,10 +1,10 @@
 # PATHS: change accordingly
 # paths to directory cointaining the wavs
 wav_directory: 
-  - ['/root/mydata/data_aishell', 'aishell']
-  - ['/root/mydata/data_aishell3', 'aishell3']
-  - ['/root/mydata/VCTK-Corpus', 'vctk']
-  - ['/root/mydata/LibriTTS', 'libritts_360']
+  - ['E:/TTSDataset/data_aishell', 'aishell']
+  - ['E:/TTSDataset/data_aishell3', 'aishell3']
+  - ['E:/TTSDataset/VCTK-Corpus', 'vctk']
+  - ['E:/TTSDataset/LibriTTS', 'libritts_360']
 
 data_type:
   aishell: ['mandarin', 'trimnone'] # 'trimcentervad'
@@ -15,9 +15,9 @@ data_type:
 english_lexion: './data/text/lexion/librispeech-lexicon.txt'
 pinyin_lexion: './data/text/lexion/pinyin-lexicon-r.txt'
 log_directory: './logs'   # weights and logs are stored here
-train_data_directory: '/root/mydata/Corpus/transformer_tts_data'   # training data is stored here
+train_data_directory: 'E:/TTSDataset/Corpus/transformer_tts_data'   # training data is stored here
 data_config: './config/data_config.yaml'
-aligner_config: './config/aligner_config.yaml'
+asr_config: './config/asr_config.yaml'
 tts_config: './config/tts_config.yaml'
 
 data_name: corpus # raw data naming for default data reader (select function from data/metadata_readers.py)

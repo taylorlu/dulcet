@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import random
 
 
 def get_angles(pos, i, model_dim):
@@ -7,7 +8,7 @@ def get_angles(pos, i, model_dim):
     return pos * angle_rates
 
 
-def positional_encoding(position, model_dim):
+def positional_encoding(position, model_dim, start_index=0):
     angle_rads = get_angles(np.arange(position)[:, np.newaxis], np.arange(model_dim)[np.newaxis, :], model_dim)
     
     # apply sin to even indices in the array; 2i
@@ -15,9 +16,10 @@ def positional_encoding(position, model_dim):
     
     # apply cos to odd indices in the array; 2i+1
     angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
-    
-    pos_encoding = angle_rads[np.newaxis, ...]
-    
+
+    angle_rads = tf.pad(angle_rads, [[start_index, 0], [0, 0]])
+    pos_encoding = tf.expand_dims(angle_rads, axis=0)
+
     return tf.cast(pos_encoding, dtype=tf.float32)
 
 
@@ -67,6 +69,30 @@ def create_mel_padding_mask(seq):
     seq = tf.reduce_sum(tf.math.abs(seq), axis=-1)
     seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
     return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, y, x)
+
+
+def create_mel_random_padding_mask(seq):
+    seq = tf.reduce_sum(tf.math.abs(seq), axis=-1)
+    seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
+    seq_input = tf.cast(tf.convert_to_tensor(seq), tf.int32)
+
+    mel_padding_mask = seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, y, x)
+
+    ## [1 1 0 0 0 0 0 1 1 1 1 1]
+    seq = tf.reduce_sum(tf.math.abs(seq), axis=0)
+    seq = tf.cast(tf.math.equal(seq, 0), tf.int32)
+
+    seq_len = tf.shape(seq)[0]
+    min_len = tf.reduce_sum(seq)
+    min_index = tf.random.uniform(shape=[], maxval=min_len//2, seed=random.randint(0, 2147483647), dtype=tf.int32)
+    max_index = tf.random.uniform(shape=[], minval=min_index + min_len//2, maxval=seq_len, seed=random.randint(0, 2147483647), dtype=tf.int32)
+    mask_arr = tf.zeros([max_index-min_index], tf.int32)
+    mask_arr = tf.pad(mask_arr, [[min_index, seq_len-max_index]], constant_values=1)
+
+    random_padding_mask = tf.bitwise.bitwise_or(mask_arr, seq_input)
+    # random_padding_mask = random_padding_mask[:, :, tf.newaxis]  # (batch_size, x, 1)
+
+    return min_index, mel_padding_mask, random_padding_mask
 
 
 def create_look_ahead_mask(size):

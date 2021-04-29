@@ -34,10 +34,8 @@ class DataReader:
                 self.text_dict.update(reader(dataset_dir))
             self.filenames = list(self.text_dict.keys())
         else:
-            self.text_dict, self.upsample = self.metadata_reading_function(Path(metadata_path))
+            self.text_dict = self.metadata_reading_function(Path(metadata_path))
             self.filenames = list(self.text_dict.keys())
-            if training:
-                self.filenames += self.upsample
 
     @classmethod
     def from_config(cls, config_manager: Config, kind: str):
@@ -66,100 +64,119 @@ class DataReader:
                    is_processed=is_processed)
 
 
-class AlignerPreprocessor:
-    
-    def __init__(self,
-                 mel_channels: int,
-                 mel_start_value: float,
-                 mel_end_value: float,
+class ASRPreprocessor:
+    def __init__(self, 
+                 spk_dict: dict,
+                 mel_channels: int, 
                  tokenizer: Tokenizer):
-        self.output_types = (tf.float32, tf.int32, tf.int32, tf.string)
-        self.padded_shapes = ([None, mel_channels], [None], [None], [])
-        self.start_vec = np.ones((1, mel_channels)) * mel_start_value
-        self.end_vec = np.ones((1, mel_channels)) * mel_end_value
+        self.output_types = (tf.int32, tf.float32, tf.int32, tf.int32, tf.int32, tf.string)
+        self.padded_shapes = ([], [None, mel_channels], [None], [], [], [])
         self.tokenizer = tokenizer
+        self.spk_dict = spk_dict
     
     def __call__(self, mel, text, sample_name):
         encoded_phonemes = self.tokenizer(text)
-        norm_mel = np.concatenate([self.start_vec, mel, self.end_vec], axis=0)
-        stop_probs = np.ones((norm_mel.shape[0]))
-        stop_probs[-1] = 2
-        return norm_mel, encoded_phonemes, stop_probs, sample_name
-    
-    def get_sample_length(self, norm_mel, encoded_phonemes, stop_probs, sample_name):
-        return tf.shape(norm_mel)[0]
-    
-    @classmethod
-    def from_config(cls, config: Config, tokenizer: Tokenizer):
-        return cls(mel_channels=config.config['mel_channels'],
-                   mel_start_value=config.config['mel_start_value'],
-                   mel_end_value=config.config['mel_end_value'],
-                   tokenizer=tokenizer)
+        if(sample_name.startswith('SSB')):
+            spk = self.spk_dict[sample_name[:7]]
+        elif(sample_name.startswith('BAC')):
+            spk = self.spk_dict[sample_name[6:11]]
+        else:
+            spk = self.spk_dict[sample_name.split('_')[0]]
 
-
-class AlignerDataset:
-    def __init__(self,
-                 data_reader: DataReader,
-                 preprocessor,
-                 mel_directory: str):
-        self.metadata_reader = data_reader
-        self.preprocessor = preprocessor
-        self.mel_directory = Path(mel_directory)
+        return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
     
-    def _read_sample(self, sample_name):
-        text = self.metadata_reader.text_dict[sample_name]
-        mel = np.load((self.mel_directory / sample_name).with_suffix('.npy').as_posix())
-        return mel, text
-    
-    def _process_sample(self, sample_name):
-        mel, text = self._read_sample(sample_name)
-        return self.preprocessor(mel=mel, text=text, sample_name=sample_name)
-    
-    def get_dataset(self, bucket_batch_sizes, bucket_boundaries, shuffle=True, drop_remainder=False):
-        return Dataset(
-            samples=self.metadata_reader.filenames,
-            preprocessor=self._process_sample,
-            output_types=self.preprocessor.output_types,
-            padded_shapes=self.preprocessor.padded_shapes,
-            shuffle=shuffle,
-            drop_remainder=drop_remainder,
-            len_function=self.preprocessor.get_sample_length,
-            bucket_batch_sizes=bucket_batch_sizes,
-            bucket_boundaries=bucket_boundaries)
-    
-    @classmethod
-    def from_config(cls,
-                    config: Config,
-                    preprocessor,
-                    kind: str,
-                    mel_directory: str = None, ):
-        kinds = ['original', 'phonemized', 'train', 'valid']
-        if kind not in kinds:
-            raise ValueError(f'Invalid kind type. Expected one of: {kinds}')
-        if mel_directory is None:
-            mel_directory = config.mel_dir
-        metadata_reader = DataReader.from_config(config, kind=kind)
-        return cls(preprocessor=preprocessor,
-                   data_reader=metadata_reader,
-                   mel_directory=mel_directory)
-
-
-class TTSPreprocessor:
-    def __init__(self, mel_channels, tokenizer: Tokenizer):
-        self.output_types = (tf.float32, tf.int32, tf.int32, tf.float32, tf.string)
-        self.padded_shapes = ([None, mel_channels], [None], [None], [512], [])
-        self.tokenizer = tokenizer
-    
-    def __call__(self, text, mel, durations, spk_emb, sample_name):
-        encoded_phonemes = self.tokenizer(text)
-        return mel, encoded_phonemes, durations, spk_emb, sample_name
-    
-    def get_sample_length(self, mel, encoded_phonemes, durations, spk_emb, sample_name):
+    def get_sample_length(self, spk, mel, encoded_phonemes, mel_len, phon_len, sample_name):
         return tf.shape(mel)[0]
     
     @classmethod
     def from_config(cls, config: Config, tokenizer: Tokenizer):
         return cls(mel_channels=config.config['mel_channels'],
+                   spk_dict=config.spk_dict,
+                   tokenizer=tokenizer)
+
+
+class ASRDataset:
+    def __init__(self,
+                 data_reader: DataReader,
+                 mel_directory: str,
+                 mel_channels: int,
+                 tokenizer: Tokenizer,
+                 spk_dict: dict):
+        self.metadata_reader = data_reader
+        self.mel_directory = Path(mel_directory)
+        self.mel_channels = mel_channels
+        self.tokenizer = tokenizer
+        self.spk_dict = spk_dict
+    
+    def _read_sample(self, sample_name: str):
+        spk, text = self.metadata_reader.text_dict[sample_name]
+        mel = np.load((self.mel_directory / spk / sample_name).with_suffix('.npy').as_posix())
+        encoded_phonemes = self.tokenizer(text[1:-1])
+        spk = self.spk_dict[spk]
+        return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
+    
+    def get_sample_length(self, spk, mel, encoded_phonemes, mel_len, phon_len, sample_name):
+        return tf.shape(mel)[0]
+    
+    def get_dataset(self, bucket_batch_sizes, bucket_boundaries, shuffle=True, drop_remainder=False):
+        return Dataset(samples=self.metadata_reader.filenames,
+                        preprocessor=self._read_sample,
+                        output_types=(tf.int32, tf.float32, tf.int32, tf.int32, tf.int32, tf.string),
+                        padded_shapes=([], [None, self.mel_channels], [None], [], [], []),
+                        len_function=self.get_sample_length,
+                        shuffle=shuffle,
+                        drop_remainder=drop_remainder,
+                        bucket_batch_sizes=bucket_batch_sizes,
+                        bucket_boundaries=bucket_boundaries)
+    
+    @classmethod
+    def from_config(cls,
+                    config: Config,
+                    kind: str,
+                    tokenizer: Tokenizer,
+                    mel_directory: str = None):
+        kinds = ['phonemized', 'train', 'valid']
+        if kind not in kinds:
+            raise ValueError(f'Invalid kind type. Expected one of: {kinds}')
+        if mel_directory is None:
+            mel_directory = config.mel_dir
+        metadata_reader = DataReader.from_config(config,
+                                                 kind=kind)
+        return cls(data_reader=metadata_reader,
+                   mel_directory=mel_directory,
+                   mel_channels=config.config['mel_channels'],
+                   tokenizer=tokenizer,
+                   spk_dict=config.spk_dict)
+
+
+class TTSPreprocessor:
+    def __init__(self, 
+                 spk_dict: dict,
+                 mel_channels: int, 
+                 tokenizer: Tokenizer):
+        self.output_types = (tf.int32, tf.float32, tf.int32, tf.int32, tf.int32, tf.string)
+        self.padded_shapes = ([], [None, mel_channels], [None], [], [], [])
+        self.tokenizer = tokenizer
+        self.spk_dict = spk_dict
+    
+    def __call__(self, mel, text, sample_name):
+        encoded_phonemes = self.tokenizer(text)
+        if(sample_name.startswith('SSB')):
+            spk = self.spk_dict[sample_name[:7]]
+        elif(sample_name.startswith('id')):
+            spk = self.spk_dict[sample_name[:7]]
+        else:
+            spk = self.spk_dict[sample_name.split('_')[0]]
+
+        return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
+    
+    def get_sample_length(self, spk, mel, encoded_phonemes, mel_len, phon_len, sample_name):
+        return tf.shape(mel)[0]
+    
+    @classmethod
+    def from_config(cls, config: Config, tokenizer: Tokenizer):
+        return cls(mel_channels=config.config['mel_channels'],
+                   spk_dict=config.spk_dict,
                    tokenizer=tokenizer)
 
 
