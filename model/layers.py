@@ -1,6 +1,7 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
 from model.transformer_utils import positional_encoding, scaled_dot_product_attention
+import numpy as np
 
 
 class CNNResNorm(tf.keras.layers.Layer):
@@ -224,14 +225,14 @@ class SelfAttentionResNormWithIN(SelfAttentionResNorm):
         self.ln_instance = tfa.layers.InstanceNormalization(epsilon=1e-6)
         self.last_ln_instance = tfa.layers.InstanceNormalization(epsilon=1e-6)
     
-    def call(self, x1, x2, training, mask, drop_n_heads):
-        attn_out1, attn_weights1 = self.mha(x1, x1, x1, mask, training=training,
+    def call(self, x1, x2, training, padding_mask, random_mask, drop_n_heads):
+        attn_out1, attn_weights1 = self.mha(x1, x1, x1, random_mask, training=training,
                                           drop_n_heads=drop_n_heads)  # (batch_size, input_seq_len, model_dim)
         attn_out1 = self.ln(attn_out1)  # (batch_size, input_seq_len, model_dim)
         out1 = self.dropout(attn_out1, training=training)
         out1 = self.last_ln(out1 + x1)
 
-        attn_out2, attn_weights2 = self.mha(x2, x2, x2, mask, training=training,
+        attn_out2, attn_weights2 = self.mha(x2, x2, x2, padding_mask, training=training,
                                           drop_n_heads=drop_n_heads)  # (batch_size, input_seq_len, model_dim)
         attn_out2 = self.ln_instance(attn_out2)  # (batch_size, input_seq_len, model_dim)
         out2 = self.dropout(attn_out2, training=training)
@@ -269,8 +270,8 @@ class SelfAttentionDenseBlockWithIN(tf.keras.layers.Layer):
         self.sarn = SelfAttentionResNormWithIN(model_dim, num_heads, dropout_rate=dropout_rate)
         self.ffn = FFNResNormWithIN(model_dim, dense_hidden_units, dropout_rate=dropout_rate)
     
-    def call(self, x1, x2, training, mask, drop_n_heads):
-        attn_out1, attn_out2, attn_weights1, attn_weights2 = self.sarn(x1, x2, mask=mask, training=training, drop_n_heads=drop_n_heads)
+    def call(self, x1, x2, training, padding_mask, random_mask, drop_n_heads):
+        attn_out1, attn_out2, attn_weights1, attn_weights2 = self.sarn(x1, x2, padding_mask=padding_mask, random_mask=random_mask, training=training, drop_n_heads=drop_n_heads)
         attn_out1, attn_out2 = self.ffn(attn_out1, attn_out2, training=training)
         return attn_out1, attn_out2, attn_weights1, attn_weights2
 
@@ -323,8 +324,8 @@ class SelfAttentionConvBlockWithIN(tf.keras.layers.Layer):
                                padding='same',
                                normalization='batch')
     
-    def call(self, x1, x2, training, mask, drop_n_heads):
-        attn_out1, attn_out2, attn_weights1, attn_weights2 = self.sarn(x1, x2, mask=mask, training=training, drop_n_heads=drop_n_heads)
+    def call(self, x1, x2, training, padding_mask, random_mask, drop_n_heads):
+        attn_out1, attn_out2, attn_weights1, attn_weights2 = self.sarn(x1, x2, padding_mask=padding_mask, random_mask=random_mask, training=training, drop_n_heads=drop_n_heads)
         conv1, conv2 = self.conv(attn_out1, attn_out2)
         return conv1, conv2, attn_weights1, attn_weights2
 
@@ -356,12 +357,16 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
                                    name=f'{self.name}_SACB_IN_{i}', kernel_size=kernel_size,
                                    conv_activation=conv_activation, conv_filters=conv_filters)
             for i, n_heads in enumerate(num_heads[dense_blocks:])]
-        self.attn_weight = tf.Variable(initial_value=tf.random_normal_initializer()(shape=[1, model_dim], dtype=tf.float32), trainable=True)
+        self.attn_weight = tf.Variable(name='attn_weight', 
+                                        dtype=tf.float32,
+                                        validate_shape=True,
+                                        initial_value=np.random.normal(size=[model_dim, 1]),
+                                        trainable=True)
         self.spk_resnet = FFNResNorm(model_dim=model_dim,
-                                     dense_hidden_units=feed_forward_dimension,
+                                     dense_hidden_units=model_dim,
                                      dropout_rate=dropout_rate)
         self.seq_resnet = FFNResNorm(model_dim=model_dim,
-                                     dense_hidden_units=feed_forward_dimension,
+                                     dense_hidden_units=model_dim,
                                      dropout_rate=dropout_rate)
         
     def call(self, inputs, training, padding_mask, min_index, random_padding_mask, drop_n_heads):
@@ -372,23 +377,31 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
         x2 = x + self.pos_encoding_scalar * self.pos_encoding[:, :seq_len, :]
         x1 = self.dropout(x1, training=training)
         x2 = self.dropout(x2, training=training)
+        random_mask = tf.maximum(tf.cast(padding_mask, tf.float32), tf.cast(random_padding_mask[:, tf.newaxis, tf.newaxis, :], tf.float32))
 
         attention_weights = {}
         for i, block in enumerate(self.encoder_SACB):
-            x1, x2, attn_weights1, attn_weights2 = block(x1, x2, training=training, mask=padding_mask, drop_n_heads=drop_n_heads)
+            x1, x2, attn_weights1, attn_weights2 = block(x1, x2, training=training, padding_mask=padding_mask, random_mask=random_mask, drop_n_heads=drop_n_heads)
             attention_weights[f'{self.name}_ConvBlock{i + 1}_SelfAttention1'] = attn_weights1
             attention_weights[f'{self.name}_ConvBlock{i + 1}_SelfAttention2'] = attn_weights2
         for i, block in enumerate(self.encoder_SADB):
-            x1, x2, attn_weights1, attn_weights2 = block(x1, x2, training=training, mask=padding_mask, drop_n_heads=drop_n_heads)
+            x1, x2, attn_weights1, attn_weights2 = block(x1, x2, training=training, padding_mask=padding_mask, random_mask=random_mask, drop_n_heads=drop_n_heads)
             attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention1'] = attn_weights1
             attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention2'] = attn_weights2
         
-        attn = tf.linalg.matmul(x1, self.attn_weight, transpose_b=True)[..., 0]
-        attn += tf.cast(random_padding_mask, tf.float32) * -1e9
-        attn = tf.nn.softmax(attn, axis=-1)
-        x1 = tf.linalg.matmul(tf.expand_dims(attn, axis=1), x1)[:, 0, :]
+        # attn = tf.linalg.matmul(x1, self.attn_weight)[..., 0]
+        # attn += tf.cast(random_padding_mask, tf.float32) * -1e9
+        # attn = tf.nn.softmax(attn, axis=-1)
+        # # x1 = tf.linalg.matmul(tf.expand_dims(attn, axis=1), x1)[:, 0, :]
+        # x1 = tf.linalg.matmul(x1, tf.expand_dims(attn, axis=1))[:, 0, :]
+        # x1 = self.spk_resnet(x1)
+
         x1 = self.spk_resnet(x1)
-        
+        random_padding_mask = random_padding_mask[:, :, tf.newaxis]
+        random_padding_mask = tf.cast(tf.math.equal(random_padding_mask, 0), tf.float32)
+        x1 = tf.reduce_sum(x1*random_padding_mask, axis=1) / tf.reduce_sum(random_padding_mask, axis=1)
+        x1 = tf.nn.l2_normalize(x1, 1)
+
         x2 = self.seq_resnet(x2)
         
         return x1, x2, attention_weights

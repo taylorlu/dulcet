@@ -44,7 +44,7 @@ class ASREncoder(tf.keras.models.Model):
         self.amsoftmax_weights = tf.Variable(name='amsoftmax_weights', 
                                             dtype=tf.float32,
                                             validate_shape=True,
-                                            initial_value=np.random.normal(size=[encoder_feed_forward_dimension, spk_count]),
+                                            initial_value=np.random.normal(size=[encoder_model_dimension, spk_count]),
                                             trainable=True)
         self.training_input_signature = [
             tf.TensorSpec(shape=(None), dtype=tf.int32),
@@ -103,8 +103,8 @@ class ASREncoder(tf.keras.models.Model):
         with tf.GradientTape() as tape:
             model_out = self.__call__(inputs=mel_inp,
                                       training=training)
-            phon_loss = tf.reduce_mean(ctc_loss(phon_tar, model_out['encoder_output'], phon_tar_len, mel_inp_len))
-            spk_loss = amsoftmax_loss(spk, model_out['spk_output'], self.amsoftmax_weights, self.spk_count)
+            phon_loss = tf.reduce_mean(self.loss[0](phon_tar, model_out['encoder_output'], phon_tar_len, mel_inp_len))
+            spk_loss = self.loss[1](spk, model_out['spk_output'], self.amsoftmax_weights, self.spk_count)
             loss = self.loss_weights[0] * phon_loss + self.loss_weights[1] * spk_loss
 
         model_out.update({'loss': loss})
@@ -135,36 +135,20 @@ class ASREncoder(tf.keras.models.Model):
         model_out.update({'spk_output': spk_output})
         return model_out
     
-    # def predict(self, inp, max_length=1000, encode=True):
-    #     if encode:
-    #         inp = self.encode_text(inp)
-    #     inp = tf.cast(tf.expand_dims(inp, 0), tf.int32)
-    #     output = tf.cast(tf.expand_dims(self.start_vec, 0), tf.float32)
-    #     output_concat = tf.cast(tf.expand_dims(self.start_vec, 0), tf.float32)
-    #     print(f'inp = {inp.shape}')
-    #     out_dict = {}
-    #     encoder_output, padding_mask, encoder_attention = self.forward_encoder(inp)
-    #     for i in range(int(max_length)):
-    #         model_out = self.forward_decoder(encoder_output, output, padding_mask)
-    #         output = tf.concat([output, model_out['mel'][:1, -1:, :]], axis=-2)
-    #         output_concat = tf.concat([tf.cast(output_concat, tf.float32), model_out['mel'][:1, -1:, :]],
-    #                                   axis=-2)
-    #         stop_pred = model_out['stop_prob'][:, -1]
-    #         out_dict = {'mel': output_concat[0, 1:, :],
-    #                     'decoder_attention': model_out['decoder_attention'],
-    #                     'encoder_attention': encoder_attention}
-
-    #         if int(tf.argmax(stop_pred, axis=-1)) == self.stop_prob_index:
-    #             break
-    #     return out_dict
+    def predict(self, mel_inp):
+        out_dict = {}
+        spk_output, encoder_output, padding_mask, encoder_attention = self.forward_encoder(mel_inp)
+        out_dict.update({'encoder_attention': encoder_attention, 'encoder_output': encoder_output, 'text_mask': padding_mask})
+        out_dict.update({'spk_output': spk_output})
+        return out_dict
     
     def set_constants(self,
                       learning_rate: float = None):
         if learning_rate is not None:
             self.optimizer.lr.assign(learning_rate)
     
-    def encode_text(self, text):
-        return self.text_pipeline(text)
+    def decode_phoneme(self, phoneme):
+        return self.text_pipeline.tokenizer.decode(phoneme)
 
 '''
 class ForwardTransformer(tf.keras.models.Model):

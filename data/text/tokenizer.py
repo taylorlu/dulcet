@@ -33,7 +33,7 @@ class Tokenizer:
         return sequence
     
     def decode(self, sequence: list) -> str:
-        return ''.join([self.idx_to_token[int(t)] for t in sequence])
+        return ' '.join([self.idx_to_token[int(t)] for t in sequence])
 
 
 class Phonemizer:
