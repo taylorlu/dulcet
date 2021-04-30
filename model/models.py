@@ -10,6 +10,8 @@ from model.layers import StatPredictor, Expand, SelfAttentionBlocks, FFNResNorm
 class ASREncoder(tf.keras.models.Model):
     
     def __init__(self,
+                 english_lexicon_path,
+                 pinyin_lexicon_path,
                  mel_channels: int,
                  spk_count: int,
                  encoder_model_dimension: int,
@@ -26,7 +28,9 @@ class ASREncoder(tf.keras.models.Model):
         super(ASREncoder, self).__init__(**kwargs)
         self.spk_count = spk_count
         self.drop_n_heads = 0
-        self.text_pipeline = TextToTokens.default(add_start_end=False)
+        self.text_pipeline = TextToTokens.default(english_lexicon_path, 
+                                                  pinyin_lexicon_path, 
+                                                  add_start_end=False)
         self.vocab_size = self.text_pipeline.tokenizer.vocab_size
         self.encoder_prenet = tf.keras.layers.Dense(encoder_prenet_dimension, 
                                                     name='encoder_prenet')

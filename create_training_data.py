@@ -128,9 +128,7 @@ if not args.skip_phonemes:
         summary_manager.add_text(f'{i}/text', text=metadatareader.text_dict[i][-1])
     
     # run cleaner on raw text
-    text_proc = TextToTokens.default(add_start_end=False,
-                                     with_stress=cm.config['with_stress'],
-                                     njobs=1)
+    text_proc = TextToTokens.default(cm.config['english_lexicon'], cm.config['pinyin_lexicon'], add_start_end=False)
     
     def process_phonemes(file_ids):
         phonemized_dict = {}

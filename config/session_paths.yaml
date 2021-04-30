@@ -12,8 +12,8 @@ data_type:
   vctk: ['english', 'trimnone']
   libritts_360: ['english', 'trimnone']
 
-english_lexion: './data/text/lexion/librispeech-lexicon.txt'
-pinyin_lexion: './data/text/lexion/pinyin-lexicon-r.txt'
+english_lexicon: './data/text/lexicon/librispeech-lexicon.txt'
+pinyin_lexicon: './data/text/lexicon/pinyin-lexicon-r.txt'
 log_directory: './logs'   # weights and logs are stored here
 train_data_directory: 'E:/TTSDataset/Corpus/transformer_tts_data'   # training data is stored here
 data_config: './config/data_config.yaml'

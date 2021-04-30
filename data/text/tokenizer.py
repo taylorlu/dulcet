@@ -38,9 +38,7 @@ class Tokenizer:
 
 class Phonemizer:
 
-    def __init__(self):
-        english_lexicon_path = r'data\text\lexicon\librispeech-lexicon.txt'
-        pinyin_lexicon_path = r'data\text\lexicon\pinyin-lexicon-r.txt'
+    def __init__(self, english_lexicon_path, pinyin_lexicon_path):
         self.english_lexicon = self.read_lexicon(english_lexicon_path)
         self.pinyin_lexicon = self.read_lexicon(pinyin_lexicon_path)
         self.g2p = G2p()
@@ -115,7 +113,7 @@ class Phonemizer:
 
 
 if(__name__=='__main__'):
-    phonemer = Phonemizer()
+    phonemer = Phonemizer('data/text/lexicon/librispeech-lexicon.txt', 'data/text/lexicon/librispeech-lexicon.txt')
     phones = phonemer.preprocess_english('Internally DSAlign uses the DeepSpeech STT engine. For it to be able to function, it requires')
     print(phones)
     phones = phonemer.preprocess_mandarin('新增较多镜头，详见平面稿及附件')

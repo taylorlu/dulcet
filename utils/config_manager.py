@@ -116,7 +116,9 @@ class Config:
         if not ignore_hash:
             self._check_hash()
         if self.model_kind == 'asr':
-            return ASREncoder(mel_channels=self.config['mel_channels'],
+            return ASREncoder(english_lexicon_path=self.config['pinyin_lexicon'], 
+                              pinyin_lexicon_path=self.config['pinyin_lexicon'],
+                              mel_channels=self.config['mel_channels'],
                               spk_count=len(self.spk_dict),
                               encoder_model_dimension=self.config['encoder_model_dimension'],
                               encoder_num_heads=self.config['encoder_num_heads'],
