@@ -31,20 +31,19 @@ def validate(model,
                                     phon_tar_len=phon_len)
         norm += 1
         val_loss['loss'] += model_out['loss']
+
     val_loss['loss'] /= norm
     summary_manager.display_loss(model_out, tag='Validation', plot_all=True)
     summary_manager.display_attention_heads(model_out, tag='ValidationAttentionHeads')
+
     # predict phonemes
     model_out = model.predict(mel)
     for j, pred_phon in enumerate(model_out['encoder_output']):
-        iphon = model.text_pipeline.tokenizer.decode(tf.math.argmax(pred_phon, axis=-1))
-        # phoneme = model.text_pipeline.tokenizer.decode(tf.math.argmax(phonemes[j], axis=-1))
-        # summary_manager.display_mel(mel=mel[j], tag=f'Validation/{fname[j].numpy().decode("utf-8")}/mel')
-        # summary_manager.display_audio(tag=f'Validation {fname[j].numpy().decode("utf-8")}/target', 
-        #                               mel=mel[j],
-        #                               description=' '.join(phoneme))
-        summary_manager.display_audio(tag=f'Validation {fname[j].numpy().decode("utf-8")}/prediction',
-                                      mel=mel[j][:mel_len[j], :], description=iphon)
+        indices = tf.math.argmax(pred_phon, axis=-1)
+        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
+        iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(phonemes[j]))
+        summary_manager.display_audio(tag=f'Validation /{iphon}',
+                                      mel=mel[j][:mel_len[j], :], description=iphon_tar)
     return val_loss['loss']
 
 
@@ -126,10 +125,11 @@ for _ in t:
     summary_manager.display_scalar(tag='Meta/learning_rate', scalar_value=model.optimizer.lr)
     if model.step % config_dict['train_images_plotting_frequency'] == 0:
         summary_manager.display_attention_heads(output, tag='TrainAttentionHeads')
-        iphon = model.text_pipeline.tokenizer.decode(tf.math.argmax(output['encoder_output'][0, ...], axis=-1))
+        indices = tf.math.argmax(output['encoder_output'][0, ...], axis=-1)
+        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
         iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(phonemes[0]))
-        summary_manager.display_audio(tag=f'prediction {iphon}\r\ntarget={iphon_tar}',
-                                      mel=mel[0][:mel_len[0], :], description=iphon)
+        summary_manager.display_audio(tag=f'prediction /{iphon}',
+                                      mel=mel[0][:mel_len[0], :], description=iphon_tar)
 
     if model.step % 1000 == 0:
         save_path = manager_training.save()
@@ -149,9 +149,10 @@ for _ in t:
         for j in range(len(test_mel)):
             if j < config['n_predictions']:
                 model_out = model.predict(test_mel[j])
-                pred_phon = tf.math.argmax(model_out['encoder_output'][j, ...], axis=-1)
-                iphon = model.text_pipeline.tokenizer.decode(pred_phon)
-                summary_manager.display_audio(tag=f'Test {fname[j].numpy().decode("utf-8")}/prediction',
-                                            mel=mel[j][:mel_len[j], :], description=iphon)
+                indices = tf.math.argmax(model_out['encoder_output'][j, ...], axis=-1)
+                iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
+                iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(test_phonemes[j]))
+                summary_manager.display_audio(tag=f'Test /{iphon}',
+                                            mel=mel[j][:test_mel_len[j], :], description=iphon_tar)
 
 print('Done.')
