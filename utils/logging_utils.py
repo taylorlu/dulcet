@@ -113,7 +113,7 @@ class SummaryManager:
     def display_attention_heads(self, outputs: dict, tag='', step: int=None, fname: list=None):
         if step is None:
             step = self.global_step
-        for layer in ['encoder_attention', 'decoder_attention']:
+        for layer in ['encoder_attention']:
             for k in outputs[layer].keys():
                 if fname is None:
                     image = tight_grid(norm_tensor(outputs[layer][k][0]))  # dim 0 of image_batch is now number of heads
