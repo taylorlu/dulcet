@@ -44,7 +44,7 @@ def validate(model,
         #                               mel=mel[j],
         #                               description=' '.join(phoneme))
         summary_manager.display_audio(tag=f'Validation {fname[j].numpy().decode("utf-8")}/prediction',
-                                      mel=mel[j][:mel_len, :], description=iphon)
+                                      mel=mel[j][:mel_len[j], :], description=iphon)
     return val_loss['loss']
 
 
@@ -127,11 +127,9 @@ for _ in t:
     if model.step % config_dict['train_images_plotting_frequency'] == 0:
         summary_manager.display_attention_heads(output, tag='TrainAttentionHeads')
         iphon = model.text_pipeline.tokenizer.decode(tf.math.argmax(output['encoder_output'][0, ...], axis=-1))
-        # summary_manager.display_mel(mel=mel[0], tag=f'Test/{fname[0].numpy().decode("utf-8")}/mel')
-        summary_manager.display_audio(tag=f'prediction {iphon}',
-                                      mel=mel[0][:mel_len, :], description=iphon)
-        summary_manager.display_audio(tag=f'target {" ".join(phonemes[0])}',
-                                      mel=mel[0][:mel_len, :])
+        iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(phonemes[0]))
+        summary_manager.display_audio(tag=f'prediction {iphon}\r\ntarget={iphon_tar}',
+                                      mel=mel[0][:mel_len[0], :], description=iphon)
 
     if model.step % 1000 == 0:
         save_path = manager_training.save()
@@ -153,10 +151,7 @@ for _ in t:
                 model_out = model.predict(test_mel[j])
                 pred_phon = tf.math.argmax(model_out['encoder_output'][j, ...], axis=-1)
                 iphon = model.text_pipeline.tokenizer.decode(pred_phon)
-                # summary_manager.display_mel(mel=mel[j], tag=f'Test/{fname[j].numpy().decode("utf-8")}/mel')
                 summary_manager.display_audio(tag=f'Test {fname[j].numpy().decode("utf-8")}/prediction',
-                                            mel=mel[j][:mel_len, :], description=iphon)
-                # summary_manager.display_audio(tag=f'Test {fname[j].numpy().decode("utf-8")}/target',
-                #                             mel=mel[j], description=test_phonemes[j])
+                                            mel=mel[j][:mel_len[j], :], description=iphon)
 
 print('Done.')
