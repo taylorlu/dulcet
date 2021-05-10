@@ -23,9 +23,9 @@ def validate(model,
              summary_manager):
     val_loss = {'loss': 0.}
     norm = 0.
-    for spk, mel, phonemes, mel_len, phon_len, fname in val_dataset.all_batches():
+    for spk, mels, phonemes, mel_len, phon_len, fname in val_dataset.all_batches():
         model_out = model.val_step(spk=spk,
-                                    mel_inp=mel,
+                                    mel_inp=mels,
                                     phon_tar=phonemes,
                                     mel_inp_len=mel_len,
                                     phon_tar_len=phon_len)
@@ -37,13 +37,14 @@ def validate(model,
     summary_manager.display_attention_heads(model_out, tag='ValidationAttentionHeads')
 
     # predict phonemes
-    model_out = model.predict(mel)
-    for j, pred_phon in enumerate(model_out['encoder_output']):
+    for j, mel in enumerate(mels):
+        model_out = model.predict(mel[np.newaxis, :mel_len[j], ...])
+        pred_phon = model_out['encoder_output'][0]
         indices = tf.math.argmax(pred_phon, axis=-1)
-        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
-        iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(phonemes[j]))
-        summary_manager.display_audio(tag=f'Validation /{iphon}',
-                                      mel=mel[j][:mel_len[j], :], description=iphon_tar)
+        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0))).replace('/', '')
+        iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[j][:phon_len[j]]).replace('/', '')
+        summary_manager.display_audio(tag=f'Validation /{j} /{iphon}',
+                                    mel=mel[:mel_len[j], :], description=iphon_tar)
     return val_loss['loss']
 
 
@@ -127,8 +128,8 @@ for _ in t:
         summary_manager.display_attention_heads(output, tag='TrainAttentionHeads')
         indices = tf.math.argmax(output['encoder_output'][0, ...], axis=-1)
         iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
-        iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(phonemes[0]))
-        summary_manager.display_audio(tag=f'prediction /{iphon}',
+        iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[0]).replace('/', '')
+        summary_manager.display_audio(tag=f'Train /{0} /{iphon}', 
                                       mel=mel[0][:mel_len[0], :], description=iphon_tar)
 
     if model.step % 1000 == 0:
@@ -145,14 +146,14 @@ for _ in t:
         t.display(f'validation loss at step {model.step}: {val_loss} (took {time_taken}s)',
                   pos=len(config_dict['n_steps_avg_losses']) + 3)
     
-    if model.step % config_dict['prediction_frequency'] == 0 and (model.step >= config_dict['prediction_start_step']):
-        for j in range(len(test_mel)):
-            if j < config['n_predictions']:
-                model_out = model.predict(test_mel[j])
-                indices = tf.math.argmax(model_out['encoder_output'][j, ...], axis=-1)
-                iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
-                iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(test_phonemes[j]))
-                summary_manager.display_audio(tag=f'Test /{iphon}',
-                                            mel=mel[j][:test_mel_len[j], :], description=iphon_tar)
+    # if model.step % config_dict['prediction_frequency'] == 0 and (model.step >= config_dict['prediction_start_step']):
+    #     for j in range(len(test_mel)):
+    #         if j < config['n_predictions']:
+    #             model_out = model.predict(test_mel[j])
+    #             indices = tf.math.argmax(model_out['encoder_output'][j, ...], axis=-1)
+    #             iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
+    #             iphon_tar = " ".join(model.text_pipeline.tokenizer.decode(test_phonemes[j]))
+    #             summary_manager.display_audio(tag=f'Test /{iphon}',
+    #                                         mel=mel[j][:test_mel_len[j], :], description=iphon_tar)
 
 print('Done.')

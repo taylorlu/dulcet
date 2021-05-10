@@ -368,7 +368,7 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
         self.seq_resnet = FFNResNorm(model_dim=model_dim,
                                      dense_hidden_units=model_dim,
                                      dropout_rate=dropout_rate)
-        self.spk_rnn = tf.keras.layers.Bidirectional(tf.keras.layers.GRU(self.model_dim//2, return_sequences=False))
+        self.spk_rnn = tf.keras.layers.GRU(self.model_dim, return_sequences=False)
         
     def call(self, inputs, training, padding_mask, min_index, random_padding_mask, drop_n_heads):
         shift_pos_encoding = positional_encoding(self.maximum_position_encoding, self.model_dim, start_index=min_index)
@@ -391,6 +391,8 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
             attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention2'] = attn_weights2
         
         x1 = self.spk_resnet(x1)
+        # if(np.random.randint(2)==0):
+        #     x1 = tf.reverse(x1, axis=[-1])
         x1 = self.spk_rnn(x1)
         x1 = tf.nn.l2_normalize(x1, 1)
 
