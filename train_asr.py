@@ -40,10 +40,10 @@ def validate(model,
     for j, mel in enumerate(mels):
         model_out = model.predict(mel[np.newaxis, :mel_len[j], ...])
         pred_phon = model_out['encoder_output'][0]
-        indices = tf.math.argmax(pred_phon, axis=-1)
-        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0))).replace('/', '')
+        pred_phon, _ = tf.nn.ctc_beam_search_decoder(pred_phon[:,np.newaxis,:], mel_len[j][np.newaxis,...], beam_width=20, top_paths=1)
+        iphon = model.text_pipeline.tokenizer.decode(pred_phon[0].values).replace('/', '')
         iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[j][:phon_len[j]]).replace('/', '')
-        summary_manager.display_audio(tag=f'Validation /{j} /{iphon}',
+        summary_manager.display_audio(tag=f'Validation /{j} /{iphon}', step=model.step, 
                                     mel=mel[:mel_len[j], :], description=iphon_tar)
     return val_loss['loss']
 
@@ -126,10 +126,11 @@ for _ in t:
     summary_manager.display_scalar(tag='Meta/learning_rate', scalar_value=model.optimizer.lr)
     if model.step % config_dict['train_images_plotting_frequency'] == 0:
         summary_manager.display_attention_heads(output, tag='TrainAttentionHeads')
-        indices = tf.math.argmax(output['encoder_output'][0, ...], axis=-1)
-        iphon = model.text_pipeline.tokenizer.decode(tf.gather_nd(indices, tf.where(indices > 0)))
+        pred_phon = output['encoder_output'][0]
+        pred_phon, _ = tf.nn.ctc_beam_search_decoder(pred_phon[:,np.newaxis,:], mel_len[0][np.newaxis,...], beam_width=20, top_paths=1)
+        iphon = model.text_pipeline.tokenizer.decode(pred_phon[0].values).replace('/', '')
         iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[0]).replace('/', '')
-        summary_manager.display_audio(tag=f'Train /{0} /{iphon}', 
+        summary_manager.display_audio(tag=f'Train /{0} /{iphon}', step=model.step, 
                                       mel=mel[0][:mel_len[0], :], description=iphon_tar)
 
     if model.step % 1000 == 0:
