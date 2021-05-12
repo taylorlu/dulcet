@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import random
 
 from model.transformer_utils import create_mel_padding_mask, create_mel_random_padding_mask
 from utils.losses import weighted_sum_losses, masked_mean_absolute_error, ctc_loss, amsoftmax_loss
@@ -84,9 +85,11 @@ class ASREncoder(tf.keras.models.Model):
     
     def _call_encoder(self, inputs, training):
         min_index, padding_mask, random_padding_mask = create_mel_random_padding_mask(inputs)
+        fb_switch = tf.random.uniform(shape=[], maxval=1, seed=random.randint(0, 2147483647), dtype=tf.float32)
         enc_input = self.encoder_prenet(inputs)
         spk_output, enc_output, attn_weights = self.encoder(enc_input,
                                                             training=training,
+                                                            fb_switch=fb_switch,
                                                             padding_mask=padding_mask,
                                                             min_index=min_index,
                                                             random_padding_mask=random_padding_mask,

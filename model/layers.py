@@ -370,7 +370,7 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
                                      dropout_rate=dropout_rate)
         self.spk_rnn = tf.keras.layers.GRU(self.model_dim, return_sequences=False)
         
-    def call(self, inputs, training, padding_mask, min_index, random_padding_mask, drop_n_heads):
+    def call(self, inputs, training, fb_switch, padding_mask, min_index, random_padding_mask, drop_n_heads):
         shift_pos_encoding = positional_encoding(self.maximum_position_encoding, self.model_dim, start_index=min_index)
         seq_len = tf.shape(inputs)[1]
         x = inputs * tf.math.sqrt(tf.cast(self.model_dim, tf.float32))
@@ -391,26 +391,10 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
             attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention2'] = attn_weights2
         
         x1 = self.spk_resnet(x1)
-        # if(np.random.randint(2)==0):
-        #     x1 = tf.reverse(x1, axis=[-1])
+        if(fb_switch<0.5):
+            x1 = tf.reverse(x1, axis=[-1])
         x1 = self.spk_rnn(x1)
         x1 = tf.nn.l2_normalize(x1, 1)
-
-        # attn = tf.linalg.matmul(x1, self.attn_weight)[..., 0]
-        # attn += tf.cast(random_padding_mask, tf.float32) * -1e9
-        # attn = tf.nn.softmax(attn, axis=-1)
-        # x1 = tf.linalg.matmul(tf.expand_dims(attn, axis=1), x1)[:, 0, :]
-        # x1 = tf.linalg.matmul(x1, tf.expand_dims(attn, axis=1))[:, 0, :]
-        # x1 = self.spk_resnet(x1)
-        # x1 = tf.nn.l2_normalize(x1, 1)
-
-        # x1 = self.spk_resnet(x1)
-        # random_padding_mask = random_padding_mask[:, :, tf.newaxis]
-        # random_padding_mask = tf.cast(tf.math.equal(random_padding_mask, 0), tf.float32)
-        # x1 = tf.reduce_sum(x1*random_padding_mask, axis=1) / tf.reduce_sum(random_padding_mask, axis=1)
-        # x1 = tf.nn.l2_normalize(x1, 1)
-        # print('==='*10)
-        # print(x1.shape)
 
         x2 = self.seq_resnet(x2)
         
