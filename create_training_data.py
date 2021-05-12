@@ -28,7 +28,7 @@ args = parser.parse_args()
 for arg in vars(args):
     print('{}: {}'.format(arg, getattr(args, arg)))
 
-cm = Config(args.config, aligner=True)
+cm = Config(args.config, asr=True)
 cm.create_remove_dirs()
 metadatareader = DataReader.from_config(cm, kind='original')
 summary_manager = SummaryManager(model=None, log_dir=cm.log_dir / 'data_preprocessing', config=cm.config,
