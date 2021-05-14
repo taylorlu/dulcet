@@ -248,14 +248,18 @@ class TTSDataset:
     def _read_sample(self, sample_name: str):
         text = self.metadata_reader.text_dict[sample_name]
         mel = np.load((self.mel_directory / sample_name).with_suffix('.npy').as_posix())
-        durations = np.load(
-            (self.duration_directory / sample_name).with_suffix('.npy').as_posix())
         if(sample_name.startswith('SSB')):
             spk_emb = self.spk_emb_dict[sample_name[:7]]
+            durations = np.load(
+                (self.duration_directory / sample_name[:7] / sample_name).with_suffix('.npy').as_posix())
         elif(sample_name.startswith('id')):
             spk_emb = self.spk_emb_dict[sample_name[:7]]
+            durations = np.load(
+                (self.duration_directory / sample_name[:7] / sample_name).with_suffix('.npy').as_posix())
         else:
             spk_emb = self.spk_emb_dict[sample_name.split('_')[0]]
+            durations = np.load(
+                (self.duration_directory / sample_name.split('_')[0] / sample_name).with_suffix('.npy').as_posix())
 
         return mel, text, durations, spk_emb
     
