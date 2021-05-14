@@ -157,7 +157,7 @@ class ASREncoder(tf.keras.models.Model):
     def decode_phoneme(self, phoneme):
         return self.text_pipeline.tokenizer.decode(phoneme)
 
-'''
+
 class ForwardTransformer(tf.keras.models.Model):
     def __init__(self,
                  encoder_model_dimension: int,
@@ -173,7 +173,6 @@ class ForwardTransformer(tf.keras.models.Model):
                  duration_kernel_size: int,
                  predictors_dropout: float,
                  mel_channels: int,
-                 phoneme_language: str,
                  with_stress: bool,
                  encoder_attention_conv_filters: list = None,
                  decoder_attention_conv_filters: list = None,
@@ -372,4 +371,3 @@ class ForwardTransformer(tf.keras.models.Model):
                 phon_idx = self.text_pipeline.tokenizer(item[0])[0]
                 new_mask[np_text == phon_idx] = item[1]
         return tf.cast(tf.convert_to_tensor(new_mask), tf.float32)
-'''
