@@ -1,3 +1,4 @@
+from re import X
 import tensorflow as tf
 import tensorflow_addons as tfa
 from model.transformer_utils import positional_encoding, scaled_dot_product_attention
@@ -330,7 +331,7 @@ class SelfAttentionConvBlockWithIN(tf.keras.layers.Layer):
         return conv1, conv2, attn_weights1, attn_weights2
 
 
-class SelfAttentionBlocks(tf.keras.layers.Layer):
+class SelfAttentionBlocksWithIN(tf.keras.layers.Layer):
     def __init__(self,
                  model_dim: int,
                  feed_forward_dimension: int,
@@ -342,7 +343,7 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
                  kernel_size: int,
                  conv_activation: str,
                  **kwargs):
-        super(SelfAttentionBlocks, self).__init__(**kwargs)
+        super(SelfAttentionBlocksWithIN, self).__init__(**kwargs)
         self.model_dim = model_dim
         self.maximum_position_encoding = maximum_position_encoding
         self.pos_encoding_scalar = tf.Variable(1.)
@@ -357,11 +358,6 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
                                    name=f'{self.name}_SACB_IN_{i}', kernel_size=kernel_size,
                                    conv_activation=conv_activation, conv_filters=conv_filters)
             for i, n_heads in enumerate(num_heads[dense_blocks:])]
-        self.attn_weight = tf.Variable(name='attn_weight', 
-                                        dtype=tf.float32,
-                                        validate_shape=True,
-                                        initial_value=np.random.normal(size=[model_dim, 1]),
-                                        trainable=True)
         self.spk_resnet = FFNResNorm(model_dim=model_dim,
                                      dense_hidden_units=model_dim,
                                      dropout_rate=dropout_rate)
@@ -399,6 +395,56 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
         x2 = self.seq_resnet(x2)
         
         return x1, x2, attention_weights
+
+
+class SelfAttentionBlocks(tf.keras.layers.Layer):
+    def __init__(self,
+                 model_dim: int,
+                 feed_forward_dimension: int,
+                 num_heads: list,
+                 maximum_position_encoding: int,
+                 conv_filters: int,
+                 dropout_rate: float,
+                 dense_blocks: int,
+                 kernel_size: int,
+                 conv_activation: str,
+                 **kwargs):
+        super(SelfAttentionBlocks, self).__init__(**kwargs)
+        self.model_dim = model_dim
+        self.maximum_position_encoding = maximum_position_encoding
+        self.pos_encoding_scalar = tf.Variable(1.)
+        self.pos_encoding = positional_encoding(maximum_position_encoding, model_dim)
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+        self.encoder_SADB = [
+            SelfAttentionDenseBlock(model_dim=model_dim, dropout_rate=dropout_rate, num_heads=n_heads,
+                                    dense_hidden_units=feed_forward_dimension, name=f'{self.name}_SADB_IN_{i}')
+            for i, n_heads in enumerate(num_heads[:dense_blocks])]
+        self.encoder_SACB = [
+            SelfAttentionConvBlock(model_dim=model_dim, dropout_rate=dropout_rate, num_heads=n_heads,
+                                   name=f'{self.name}_SACB_IN_{i}', kernel_size=kernel_size,
+                                   conv_activation=conv_activation, conv_filters=conv_filters)
+            for i, n_heads in enumerate(num_heads[dense_blocks:])]
+        self.seq_resnet = FFNResNorm(model_dim=model_dim,
+                                     dense_hidden_units=model_dim,
+                                     dropout_rate=dropout_rate)
+        
+    def call(self, inputs, training, padding_mask, drop_n_heads):
+        seq_len = tf.shape(inputs)[1]
+        x = inputs * tf.math.sqrt(tf.cast(self.model_dim, tf.float32))
+        X = x + self.pos_encoding_scalar * self.pos_encoding[:, :seq_len, :]
+        x = self.dropout(x, training=training)
+
+        attention_weights = {}
+        for i, block in enumerate(self.encoder_SACB):
+            x, attn_weights = block(x, training=training, padding_mask=padding_mask, drop_n_heads=drop_n_heads)
+            attention_weights[f'{self.name}_ConvBlock{i + 1}_SelfAttention'] = attn_weights
+        for i, block in enumerate(self.encoder_SADB):
+            x, attn_weights = block(x, training=training, padding_mask=padding_mask, drop_n_heads=drop_n_heads)
+            attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention'] = attn_weights
+        
+        x = self.seq_resnet(x)
+        
+        return x, attention_weights
 
 
 class CrossAttentionResnorm(tf.keras.layers.Layer):

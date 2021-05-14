@@ -2,10 +2,10 @@ import tensorflow as tf
 import numpy as np
 import random
 
-from model.transformer_utils import create_mel_padding_mask, create_mel_random_padding_mask
+from model.transformer_utils import create_mel_padding_mask, create_mel_random_padding_mask, create_encoder_padding_mask
 from utils.losses import weighted_sum_losses, masked_mean_absolute_error, ctc_loss, amsoftmax_loss
 from data.text import TextToTokens
-from model.layers import StatPredictor, Expand, SelfAttentionBlocks, FFNResNorm
+from model.layers import StatPredictor, Expand, SelfAttentionBlocks, SelfAttentionBlocksWithIN
 
 
 class ASREncoder(tf.keras.models.Model):
@@ -35,16 +35,16 @@ class ASREncoder(tf.keras.models.Model):
         self.vocab_size = self.text_pipeline.tokenizer.vocab_size
         self.encoder_prenet = tf.keras.layers.Dense(encoder_prenet_dimension, 
                                                     name='encoder_prenet')
-        self.encoder = SelfAttentionBlocks(model_dim=encoder_model_dimension,
-                                           dropout_rate=dropout_rate,
-                                           num_heads=encoder_num_heads,
-                                           feed_forward_dimension=encoder_feed_forward_dimension,
-                                           maximum_position_encoding=encoder_maximum_position_encoding,
-                                           dense_blocks=encoder_dense_blocks,
-                                           conv_filters=encoder_attention_conv_filters,
-                                           kernel_size=encoder_attention_conv_kernel,
-                                           conv_activation='relu',
-                                           name='Encoder')
+        self.encoder = SelfAttentionBlocksWithIN(model_dim=encoder_model_dimension,
+                                                dropout_rate=dropout_rate,
+                                                num_heads=encoder_num_heads,
+                                                feed_forward_dimension=encoder_feed_forward_dimension,
+                                                maximum_position_encoding=encoder_maximum_position_encoding,
+                                                dense_blocks=encoder_dense_blocks,
+                                                conv_filters=encoder_attention_conv_filters,
+                                                kernel_size=encoder_attention_conv_kernel,
+                                                conv_activation='relu',
+                                                name='Encoder')
         self.classifier = tf.keras.layers.Dense(self.vocab_size)
         self.amsoftmax_weights = tf.Variable(name='amsoftmax_weights', 
                                             dtype=tf.float32,
