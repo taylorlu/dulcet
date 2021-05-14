@@ -43,8 +43,8 @@ def validate(model,
         pred_phon, _ = tf.nn.ctc_beam_search_decoder(pred_phon[:,np.newaxis,:], mel_len[j][np.newaxis,...], beam_width=20, top_paths=1)
         iphon = model.text_pipeline.tokenizer.decode(pred_phon[0].values).replace('/', '')
         iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[j][:phon_len[j]]).replace('/', '')
-        summary_manager.display_audio(tag=f'Validation /{j} /{iphon}', step=model.step, 
-                                    mel=mel[:mel_len[j], :], description=iphon_tar)
+        summary_manager.display_audio(tag=f'Validation /{j} /{iphon_tar}', step=model.step, 
+                                    mel=mel[:mel_len[j], :], description=iphon)
     return val_loss['loss']
 
 
@@ -130,8 +130,8 @@ for _ in t:
         pred_phon, _ = tf.nn.ctc_beam_search_decoder(pred_phon[:,np.newaxis,:], mel_len[0][np.newaxis,...], beam_width=20, top_paths=1)
         iphon = model.text_pipeline.tokenizer.decode(pred_phon[0].values).replace('/', '')
         iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[0]).replace('/', '')
-        summary_manager.display_audio(tag=f'Train /{0} /{iphon}', step=model.step, 
-                                      mel=mel[0][:mel_len[0], :], description=iphon_tar)
+        summary_manager.display_audio(tag=f'Train /{0} /{iphon_tar}', step=model.step, 
+                                      mel=mel[0][:mel_len[0], :], description=iphon)
 
     if model.step % 1000 == 0:
         save_path = manager_training.save()
