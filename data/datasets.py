@@ -149,6 +149,59 @@ class ASRDataset:
                    spk_dict=config.spk_dict)
 
 
+class MelDurDataset:
+    def __init__(self,
+                 data_reader: DataReader,
+                 mel_directory: str,
+                 mel_channels: int,
+                 tokenizer: Tokenizer,
+                 spk_dict: dict):
+        self.metadata_reader = data_reader
+        self.mel_directory = Path(mel_directory)
+        self.mel_channels = mel_channels
+        self.tokenizer = tokenizer
+        self.spk_dict = spk_dict
+    
+    def _read_sample(self, sample_name: str):
+        spk_name, text = self.metadata_reader.text_dict[sample_name]
+        mel = np.load((self.mel_directory / spk_name / sample_name).with_suffix('.npy').as_posix())
+        encoded_phonemes = self.tokenizer(text[1:-1])
+        return spk_name, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
+    
+    def get_sample_length(self, spk_name, mel, encoded_phonemes, mel_len, phon_len, sample_name):
+        return tf.shape(mel)[0]
+    
+    def get_dataset(self, bucket_batch_sizes, bucket_boundaries, shuffle=True, drop_remainder=False):
+        return Dataset(samples=self.metadata_reader.filenames,
+                        preprocessor=self._read_sample,
+                        output_types=(tf.string, tf.float32, tf.int32, tf.int32, tf.int32, tf.string),
+                        padded_shapes=([], [None, self.mel_channels], [None], [], [], []),
+                        len_function=self.get_sample_length,
+                        shuffle=shuffle,
+                        drop_remainder=drop_remainder,
+                        bucket_batch_sizes=bucket_batch_sizes,
+                        bucket_boundaries=bucket_boundaries)
+    
+    @classmethod
+    def from_config(cls,
+                    config: Config,
+                    kind: str,
+                    tokenizer: Tokenizer,
+                    mel_directory: str = None):
+        kinds = ['phonemized', 'train', 'valid']
+        if kind not in kinds:
+            raise ValueError(f'Invalid kind type. Expected one of: {kinds}')
+        if mel_directory is None:
+            mel_directory = config.mel_dir
+        metadata_reader = DataReader.from_config(config,
+                                                 kind=kind)
+        return cls(data_reader=metadata_reader,
+                   mel_directory=mel_directory,
+                   mel_channels=config.config['mel_channels'],
+                   tokenizer=tokenizer,
+                   spk_dict=config.spk_dict)
+
+
 class TTSPreprocessor:
     def __init__(self, 
                  spk_dict: dict,
