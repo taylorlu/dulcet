@@ -7,7 +7,7 @@ import tensorflow as tf
 import ruamel.yaml
 import pickle
 
-from model.models import ASREncoder
+from model.models import ASREncoder, ForwardTransformer
 from utils.scheduling import reduction_schedule
 
 
@@ -40,7 +40,7 @@ class Config:
         self.valid_metadata_path = self.data_dir / f"valid_metadata.{self.config['text_settings_name']}.txt"
         self.phonemized_metadata_path = self.data_dir / f"phonemized_metadata.{self.config['text_settings_name']}.txt"
         self.mel_dir = self.data_dir / f"mels.{self.config['audio_settings_name']}"
-        self.duration_dir = self.data_dir / f"durations.{self.session_names['asr']}"
+        self.duration_dir = self.data_dir / f"durations.{self.config['audio_settings_name']}"
 
         mel_len_file = Path(self.data_dir) / 'mel_len.pkl'
         if(mel_len_file.is_file()):
@@ -132,29 +132,28 @@ class Config:
                               debug=self.config['debug'])
         
         else:
-            pass
-            # return ForwardTransformer(encoder_model_dimension=self.config['encoder_model_dimension'],
-            #                           decoder_model_dimension=self.config['decoder_model_dimension'],
-            #                           dropout_rate=self.config['dropout_rate'],
-            #                           decoder_num_heads=self.config['decoder_num_heads'],
-            #                           encoder_num_heads=self.config['encoder_num_heads'],
-            #                           encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
-            #                           decoder_maximum_position_encoding=self.config['decoder_max_position_encoding'],
-            #                           encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
-            #                           decoder_feed_forward_dimension=self.config['decoder_feed_forward_dimension'],
-            #                           encoder_attention_conv_filters=self.config['encoder_attention_conv_filters'],
-            #                           decoder_attention_conv_filters=self.config['decoder_attention_conv_filters'],
-            #                           encoder_attention_conv_kernel=self.config['encoder_attention_conv_kernel'],
-            #                           decoder_attention_conv_kernel=self.config['decoder_attention_conv_kernel'],
-            #                           duration_conv_filters=self.config['duration_conv_filters'],
-            #                           duration_kernel_size=self.config['duration_kernel_size'],
-            #                           predictors_dropout=self.config['predictors_dropout'],
-            #                           mel_channels=self.config['mel_channels'],
-            #                           encoder_dense_blocks=self.config['encoder_dense_blocks'],
-            #                           decoder_dense_blocks=self.config['decoder_dense_blocks'],
-            #                           phoneme_language=self.config['phoneme_language'],
-            #                           with_stress=self.config['with_stress'],
-            #                           debug=self.config['debug'])
+            return ForwardTransformer(encoder_model_dimension=self.config['encoder_model_dimension'],
+                                      decoder_model_dimension=self.config['decoder_model_dimension'],
+                                      dropout_rate=self.config['dropout_rate'],
+                                      decoder_num_heads=self.config['decoder_num_heads'],
+                                      encoder_num_heads=self.config['encoder_num_heads'],
+                                      encoder_maximum_position_encoding=self.config['encoder_max_position_encoding'],
+                                      decoder_maximum_position_encoding=self.config['decoder_max_position_encoding'],
+                                      encoder_feed_forward_dimension=self.config['encoder_feed_forward_dimension'],
+                                      decoder_feed_forward_dimension=self.config['decoder_feed_forward_dimension'],
+                                      encoder_attention_conv_filters=self.config['encoder_attention_conv_filters'],
+                                      decoder_attention_conv_filters=self.config['decoder_attention_conv_filters'],
+                                      encoder_attention_conv_kernel=self.config['encoder_attention_conv_kernel'],
+                                      decoder_attention_conv_kernel=self.config['decoder_attention_conv_kernel'],
+                                      duration_conv_filters=self.config['duration_conv_filters'],
+                                      duration_kernel_size=self.config['duration_kernel_size'],
+                                      predictors_dropout=self.config['predictors_dropout'],
+                                      mel_channels=self.config['mel_channels'],
+                                      encoder_dense_blocks=self.config['encoder_dense_blocks'],
+                                      decoder_dense_blocks=self.config['decoder_dense_blocks'],
+                                      phoneme_language=self.config['phoneme_language'],
+                                      with_stress=self.config['with_stress'],
+                                      debug=self.config['debug'])
     
     def compile_model(self, model):
         if self.model_kind == 'asr':

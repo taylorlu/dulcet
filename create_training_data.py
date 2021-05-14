@@ -36,8 +36,10 @@ summary_manager = SummaryManager(model=None, log_dir=cm.log_dir / 'data_preproce
 print(f'\nFound {len(metadatareader.filenames)} wavfiles.')
 audio = Audio(config=cm.config)
 
-if not args.skip_mels:
+# y, sr = audio.load_wav(r'E:\TTSDataset\LibriTTS\train-clean-360\4595\45218\4595_45218_000016_000005.wav')
+# librosa.output.write_wav('test.wav', y, sr)
 
+if not args.skip_mels:
     len_dict = {}
     remove_files = []
     mel_lens = []
