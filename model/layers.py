@@ -436,10 +436,10 @@ class SelfAttentionBlocks(tf.keras.layers.Layer):
 
         attention_weights = {}
         for i, block in enumerate(self.encoder_SACB):
-            x, attn_weights = block(x, training=training, padding_mask=padding_mask, drop_n_heads=drop_n_heads)
+            x, attn_weights = block(x, training=training, mask=padding_mask, drop_n_heads=drop_n_heads)
             attention_weights[f'{self.name}_ConvBlock{i + 1}_SelfAttention'] = attn_weights
         for i, block in enumerate(self.encoder_SADB):
-            x, attn_weights = block(x, training=training, padding_mask=padding_mask, drop_n_heads=drop_n_heads)
+            x, attn_weights = block(x, training=training, mask=padding_mask, drop_n_heads=drop_n_heads)
             attention_weights[f'{self.name}_DenseBlock{i + 1}_SelfAttention'] = attn_weights
         
         x = self.seq_resnet(x)

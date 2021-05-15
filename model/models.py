@@ -302,7 +302,7 @@ class ForwardTransformer(tf.keras.models.Model):
              min_durations_mask=None):
         encoder_padding_mask = create_encoder_padding_mask(x)
         x = self.encoder_prenet(x)
-        x, encoder_attention = self.encoder(x, training=training, padding_mask=encoder_padding_mask)
+        x, encoder_attention = self.encoder(x, training=training, padding_mask=encoder_padding_mask, drop_n_heads=0)
         padding_mask = 1. - tf.squeeze(encoder_padding_mask, axis=(1, 2))[:, :, None]
         spk_emb = tf.math.softplus(self.speaker_fc(spk_emb))
         spk_emb = tf.expand_dims(spk_emb, 1)
@@ -320,7 +320,7 @@ class ForwardTransformer(tf.keras.models.Model):
             use_durations = tf.math.maximum(use_durations, tf.expand_dims(min_durations_mask, -1))
         mels = self.expand(x, use_durations)
         expanded_mask = create_mel_padding_mask(mels)
-        mels, decoder_attention = self.decoder(mels, training=training, padding_mask=expanded_mask, reduction_factor=1)
+        mels, decoder_attention = self.decoder(mels, training=training, padding_mask=expanded_mask, drop_n_heads=0)
         mels = self.out(mels)
         model_out = {'mel': mels,
                      'duration': durations,
