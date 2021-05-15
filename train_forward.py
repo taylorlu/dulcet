@@ -141,7 +141,8 @@ else:
 if config_dict['debug'] is True:
     print('\nWARNING: DEBUG is set to True. Training in eager mode.')
 
-display_target_symbol_duration_distributions()
+# display_target_symbol_duration_distributions()
+
 # main event
 print('\nTRAINING')
 losses = []
@@ -156,7 +157,7 @@ all_durations = {}
 t = trange(model.step, config_dict['max_steps'], leave=True)
 for _ in t:
     t.set_description(f'step {model.step}')
-    mel, phonemes, durations, spk_emb, fname = train_dataset.next_batch()
+    phonemes, mel, durations, spk_emb, fname = train_dataset.next_batch()
     learning_rate = piecewise_linear_schedule(model.step, config_dict['learning_rate_schedule'])
     model.set_constants(learning_rate=learning_rate)
     
