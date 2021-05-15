@@ -34,7 +34,7 @@ data_handler = MelDurDataset.from_config(config,
                                          kind='phonemized')
 dataset = data_handler.get_dataset(bucket_batch_sizes=config_dict['bucket_batch_sizes'],
                                    bucket_boundaries=config_dict['bucket_boundaries'],
-                                   shuffle=True)
+                                   shuffle=False)
 
 # create logger and checkpointer and restore latest model
 checkpoint = tf.train.Checkpoint(step=tf.Variable(1),
@@ -60,6 +60,8 @@ char_list = [''] +list(model.text_pipeline.tokenizer.idx_to_token.values())
 smt_config = CtcSegmentationParameters(char_list=char_list)
 smt_config.index_duration = 0.0115545
 
+labelFile = open(r'/root/mydata/Corpus/transformer_tts_data.corpus/phonemized_metadata.NoStress2.txt', 'w')
+
 for c, (spk_name_batch, mel_batch, phoneme_batch, mel_len_batch, phon_len_batch, fname_batch) in iterator:
     iterator.set_description(f'Processing dataset')
 
@@ -77,15 +79,28 @@ for c, (spk_name_batch, mel_batch, phoneme_batch, mel_len_batch, phon_len_batch,
         segments = determine_utterance_segments(
             smt_config, utt_begin_indices, char_probs, timings, text[0]
         )
-        durations = []
-        for j, segment in enumerate(segments):
-            if(j==0):
-                durations.append(round(segment[1]/smt_config.index_duration))
-            elif(j==len(segments)-1):
-                durations.append(round(mel_len_batch[i].numpy()-segment[0]/smt_config.index_duration))
-            else:
-                durations.append(round((segment[1] - segment[0])/smt_config.index_duration))
 
-            np.save(str(config.duration_dir / spk_name_batch[i].numpy().decode() / f"{name.numpy().decode('utf-8')}.npy"), np.array(durations))
+        durations = []
+        for j, seg in enumerate(segments):
+            durations.append([seg[0], seg[1], phoneme_batch[i][j].numpy()])
+        if(segments[0][-1]<0.001):
+            durations.insert(0, [0, segments[0][0], 358])
+        if(segments[-1][-1]<0.001):
+            durations[-1][1] += 0.15
+            durations.append([durations[-1][1], mel_len_batch[i].numpy()*smt_config.index_duration, 358])
+
+        fr_lens = []
+        phons = []
+        for dur in durations:
+            fr_len = round((dur[1] - dur[0])/smt_config.index_duration)
+            fr_lens.append(fr_len)
+            phons.append(model.text_pipeline.tokenizer.idx_to_token[dur[-1]])
+
+        if(sum(fr_lens)!=mel_len_batch[i].numpy()):
+            fr_lens[-1] += mel_len_batch[i].numpy() - sum(fr_lens)
+
+        np.save(str(config.duration_dir / spk_name_batch[i].numpy().decode() / f"{name.numpy().decode('utf-8')}.npy"), np.array(fr_lens))
+        phons = '{'+" ".join(phons)+'}'
+        labelFile.writelines(f'{fname_batch[i].numpy().decode()}|{spk_name_batch[i].numpy().decode()}|{phons}\n')
 
 print('Done.')
