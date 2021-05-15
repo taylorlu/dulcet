@@ -25,10 +25,10 @@ def jitter(spk_emb_dim):
 
 
 def display_target_symbol_duration_distributions():
-    phon_data, ups = post_processed_reader(config.phonemized_metadata_path)
+    phon_data = post_processed_reader(config.phonemized_metadata_path)
     dur_dict = {}
     for key in phon_data.keys():
-        dur_dict[key] = np.load((config.duration_dir / key).with_suffix('.npy'))
+        dur_dict[key] = np.load((config.duration_dir / phon_data[key][0] / key).with_suffix('.npy'))
     symbol_durs = {}
     for key in dur_dict:
         for i, phoneme in enumerate(phon_data[key]):
@@ -39,7 +39,7 @@ def display_target_symbol_duration_distributions():
 
 
 def display_predicted_symbol_duration_distributions(all_durations):
-    phon_data, ups = post_processed_reader(config.phonemized_metadata_path)
+    phon_data = post_processed_reader(config.phonemized_metadata_path)
     symbol_durs = {}
     for key in all_durations.keys():
         clean_key = key.decode('utf-8')
