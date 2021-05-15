@@ -153,8 +153,6 @@ class Config:
                                       mel_channels=self.config['mel_channels'],
                                       encoder_dense_blocks=self.config['encoder_dense_blocks'],
                                       decoder_dense_blocks=self.config['decoder_dense_blocks'],
-                                      phoneme_language=self.config['phoneme_language'],
-                                      with_stress=self.config['with_stress'],
                                       debug=self.config['debug'])
     
     def compile_model(self, model):
