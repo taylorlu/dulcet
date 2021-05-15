@@ -132,7 +132,9 @@ class Config:
                               debug=self.config['debug'])
         
         else:
-            return ForwardTransformer(encoder_model_dimension=self.config['encoder_model_dimension'],
+            return ForwardTransformer(english_lexicon_path=self.config['pinyin_lexicon'], 
+                                      pinyin_lexicon_path=self.config['pinyin_lexicon'],
+                                      encoder_model_dimension=self.config['encoder_model_dimension'],
                                       decoder_model_dimension=self.config['decoder_model_dimension'],
                                       dropout_rate=self.config['dropout_rate'],
                                       decoder_num_heads=self.config['decoder_num_heads'],

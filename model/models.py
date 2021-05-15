@@ -160,6 +160,8 @@ class ASREncoder(tf.keras.models.Model):
 
 class ForwardTransformer(tf.keras.models.Model):
     def __init__(self,
+                 english_lexicon_path,
+                 pinyin_lexicon_path,
                  encoder_model_dimension: int,
                  decoder_model_dimension: int,
                  dropout_rate: float,
@@ -173,7 +175,6 @@ class ForwardTransformer(tf.keras.models.Model):
                  duration_kernel_size: int,
                  predictors_dropout: float,
                  mel_channels: int,
-                 with_stress: bool,
                  encoder_attention_conv_filters: list = None,
                  decoder_attention_conv_filters: list = None,
                  encoder_attention_conv_kernel: int = None,
@@ -183,8 +184,9 @@ class ForwardTransformer(tf.keras.models.Model):
                  debug=False,
                  **kwargs):
         super(ForwardTransformer, self).__init__(**kwargs)
-        self.text_pipeline = TextToTokens.default(add_start_end=False,
-                                                  with_stress=with_stress)
+        self.text_pipeline = TextToTokens.default(english_lexicon_path, 
+                                                  pinyin_lexicon_path, 
+                                                  add_start_end=False)
         self.mel_channels = mel_channels
         self.encoder_prenet = tf.keras.layers.Embedding(self.text_pipeline.tokenizer.vocab_size,
                                                         encoder_model_dimension,
