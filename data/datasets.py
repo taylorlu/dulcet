@@ -204,32 +204,22 @@ class MelDurDataset:
 
 class TTSPreprocessor:
     def __init__(self, 
-                 spk_dict: dict,
                  mel_channels: int, 
                  tokenizer: Tokenizer):
-        self.output_types = (tf.int32, tf.float32, tf.int32, tf.int32, tf.int32, tf.string)
-        self.padded_shapes = ([], [None, mel_channels], [None], [], [], [])
+        self.output_types = (tf.int32, tf.float32, tf.int32, tf.float32, tf.string)
+        self.padded_shapes = ([None], [None, mel_channels], [None], [512], [])
         self.tokenizer = tokenizer
-        self.spk_dict = spk_dict
     
-    def __call__(self, mel, text, sample_name):
-        encoded_phonemes = self.tokenizer(text)
-        if(sample_name.startswith('SSB')):
-            spk = self.spk_dict[sample_name[:7]]
-        elif(sample_name.startswith('id')):
-            spk = self.spk_dict[sample_name[:7]]
-        else:
-            spk = self.spk_dict[sample_name.split('_')[0]]
-
-        return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
+    def __call__(self, text, mel, durations, spk_emb, sample_name):
+        encoded_phonemes = self.tokenizer(text[1:-1]) ##{y ie4 w an3}s
+        return encoded_phonemes, mel, durations, spk_emb, sample_name
     
-    def get_sample_length(self, spk, mel, encoded_phonemes, mel_len, phon_len, sample_name):
+    def get_sample_length(self, encoded_phonemes, mel, durations, spk_emb, sample_name):
         return tf.shape(mel)[0]
     
     @classmethod
     def from_config(cls, config: Config, tokenizer: Tokenizer):
         return cls(mel_channels=config.config['mel_channels'],
-                   spk_dict=config.spk_dict,
                    tokenizer=tokenizer)
 
 
@@ -246,28 +236,17 @@ class TTSDataset:
         self.spk_emb_dict = pickle.load(open(str(self.mel_directory / '../' / 'spk_emb.pkl'), 'rb'))
     
     def _read_sample(self, sample_name: str):
-        text = self.metadata_reader.text_dict[sample_name]
-        if(sample_name.startswith('SSB')):
-            spk_emb = self.spk_emb_dict[sample_name[:7]]
-            mel = np.load((self.mel_directory / sample_name[:7] /sample_name).with_suffix('.npy').as_posix())
-            durations = np.load(
-                (self.duration_directory / sample_name[:7] / sample_name).with_suffix('.npy').as_posix())
-        elif(sample_name.startswith('id')):
-            spk_emb = self.spk_emb_dict[sample_name[:7]]
-            mel = np.load((self.mel_directory / sample_name[:7] /sample_name).with_suffix('.npy').as_posix())
-            durations = np.load(
-                (self.duration_directory / sample_name[:7] / sample_name).with_suffix('.npy').as_posix())
-        else:
-            spk_emb = self.spk_emb_dict[sample_name.split('_')[0]]
-            mel = np.load((self.mel_directory / sample_name.split('_')[0] /sample_name).with_suffix('.npy').as_posix())
-            durations = np.load(
-                (self.duration_directory / sample_name.split('_')[0] / sample_name).with_suffix('.npy').as_posix())
+        spk_name, text = self.metadata_reader.text_dict[sample_name]
+        spk_emb = self.spk_emb_dict[spk_name]
+        mel = np.load((self.mel_directory / spk_name /sample_name).with_suffix('.npy').as_posix())
+        durations = np.load(
+            (self.duration_directory / spk_name / sample_name).with_suffix('.npy').as_posix())
 
-        return mel, text, durations, spk_emb
-    
+        return text, mel, durations, spk_emb, sample_name
+
     def _process_sample(self, sample_name: str):
-        mel, text, durations, spk_emb = self._read_sample(sample_name)
-        return self.preprocessor(mel=mel, text=text, durations=durations, spk_emb=spk_emb, sample_name=sample_name)
+        text, mel, durations, spk_emb, sample_name = self._read_sample(sample_name)
+        return self.preprocessor(text=text, mel=mel, durations=durations, spk_emb=spk_emb, sample_name=sample_name)
     
     def get_dataset(self, bucket_batch_sizes, bucket_boundaries, shuffle=True, drop_remainder=False):
         return Dataset(
