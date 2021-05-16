@@ -114,9 +114,7 @@ for c, (spk_name_batch, mel_batch, phoneme_batch, mel_len_batch, phon_len_batch,
 
         if(sum(fr_lens)<mel_len_batch[i].numpy()):
             # the last phoneme should be justify.
-            fr_len = mel_len_batch[i].numpy()-sum(fr_lens)
-            fr_lens.append(fr_len)
-            phons.append(model.text_pipeline.tokenizer.idx_to_token[dur[-1]])
+            fr_lens[-1] += mel_len_batch[i].numpy() - sum(fr_lens)
 
             np.save(str(config.duration_dir / spk_name_batch[i].numpy().decode() / f"{name.numpy().decode('utf-8')}.npy"), np.array(fr_lens))
             phons = '{'+" ".join(phons)+'}'
