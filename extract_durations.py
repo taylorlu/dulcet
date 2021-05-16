@@ -72,7 +72,11 @@ for c, (spk_name_batch, mel_batch, phoneme_batch, mel_len_batch, phon_len_batch,
     for i, name in enumerate(fname_batch):
         os.makedirs(os.path.join(config.duration_dir, spk_name_batch[i].numpy().decode()), exist_ok=True)
 
-        text = [phoneme_batch[i][:phon_len_batch[i]].numpy()]
+        text = list(phoneme_batch[i][:phon_len_batch[i]].numpy())
+        while 358 in text:
+            text.remove(358)
+        text = [np.array(text)]
+
         ground_truth_mat, utt_begin_indices = prepare_token_list(smt_config, text)
         timings, char_probs, state_list = ctc_segmentation(smt_config, pred_phon[i][:mel_len_batch[i]].numpy(), ground_truth_mat)
         utt_begin_indices = list(range(2, len(timings)))
@@ -81,26 +85,45 @@ for c, (spk_name_batch, mel_batch, phoneme_batch, mel_len_batch, phon_len_batch,
         )
 
         durations = []
+        if(segments[0][-1]<-0.001 or segments[0][1]<0.05):
+            segments[0] = (0, segments[0][1], segments[0][2])
+        else:
+            durations.append([0, segments[0][0], 358])
+
+        last_duration = None
+        if(segments[-1][-1]<-0.001):
+            segments[-1] = (segments[-1][0], segments[-1][1]+0.15, segments[-1][2])
+            if(segments[-1][1]>mel_len_batch[i].numpy()*smt_config.index_duration or
+                mel_len_batch[i].numpy()*smt_config.index_duration-segments[-1][1]<0.05):
+                pass
+            else:
+                last_duration = [segments[-1][1], -1, 358]
+
         for j, seg in enumerate(segments):
             durations.append([seg[0], seg[1], phoneme_batch[i][j].numpy()])
-        if(segments[0][-1]<0.001):
-            durations.insert(0, [0, segments[0][0], 358])
-        if(segments[-1][-1]<0.001):
-            durations[-1][1] += 0.15
-            durations.append([durations[-1][1], mel_len_batch[i].numpy()*smt_config.index_duration, 358])
+
+        if(last_duration is not None):
+            durations.append(last_duration)
 
         fr_lens = []
         phons = []
-        for dur in durations:
+        for dur in durations[:-1]:
             fr_len = round((dur[1] - dur[0])/smt_config.index_duration)
             fr_lens.append(fr_len)
             phons.append(model.text_pipeline.tokenizer.idx_to_token[dur[-1]])
 
-        if(sum(fr_lens)!=mel_len_batch[i].numpy()):
-            fr_lens[-1] += mel_len_batch[i].numpy() - sum(fr_lens)
+        if(sum(fr_lens)<mel_len_batch[i].numpy()):
+            # the last phoneme should be justify.
+            fr_len = mel_len_batch[i].numpy()-sum(fr_lens)
+            fr_lens.append(fr_len)
+            phons.append(model.text_pipeline.tokenizer.idx_to_token[dur[-1]])
 
-        np.save(str(config.duration_dir / spk_name_batch[i].numpy().decode() / f"{name.numpy().decode('utf-8')}.npy"), np.array(fr_lens))
-        phons = '{'+" ".join(phons)+'}'
-        labelFile.writelines(f'{fname_batch[i].numpy().decode()}|{spk_name_batch[i].numpy().decode()}|{phons}\n')
+            np.save(str(config.duration_dir / spk_name_batch[i].numpy().decode() / f"{name.numpy().decode('utf-8')}.npy"), np.array(fr_lens))
+            phons = '{'+" ".join(phons)+'}'
+            labelFile.writelines(f'{fname_batch[i].numpy().decode()}|{spk_name_batch[i].numpy().decode()}|{phons}\n')
+        else:
+            print(fname_batch[i].numpy().decode())
+            print(durations)
+
 
 print('Done.')
