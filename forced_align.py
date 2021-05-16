@@ -34,7 +34,7 @@ data_handler = ASRDataset.from_config(config,
                                       kind='valid')
 dataset = data_handler.get_dataset(bucket_batch_sizes=config_dict['bucket_batch_sizes'],
                                    bucket_boundaries=config_dict['bucket_boundaries'],
-                                   shuffle=True)
+                                   shuffle=False)
 
 # create logger and checkpointer and restore latest model
 summary_manager = SummaryManager(model=model, log_dir=config.log_dir, config=config_dict)
@@ -56,41 +56,61 @@ else:
 if config_dict['debug'] is True:
     print('\nWARNING: DEBUG is set to True. Training in eager mode.')
 
+for spk, mels, phonemes, mel_len, phon_len, fname in dataset.all_batches():
+    phon_len = phon_len.numpy()
+    mel_len = mel_len.numpy()
+    phonemes = phonemes.numpy()
+    for j, mel in enumerate(mels):
+        # print(fname[j], phonemes[j], phon_len[j])
+        temp = []
+        for phoneme in phonemes[j]:
+            if(phoneme!=358):
+                temp.append(phoneme)
+            else:
+                phon_len[j] -= 1
+        phonemes[j][:len(temp)] = temp
 
-spk, mels, phonemes, mel_len, phon_len, fname = dataset.next_batch()
-for j, mel in enumerate(mels):
-    print(fname[j], phonemes[j])
-    model_out = model.predict(mel[np.newaxis, :mel_len[j], ...])
-    pred_phon = model_out['encoder_output'][0]
-    pred_phon = tf.nn.log_softmax(pred_phon)
-    iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[j][:phon_len[j]].numpy())
-    print(iphon_tar)
+        model_out = model.predict(mel[np.newaxis, :mel_len[j], ...])
+        pred_phon = model_out['encoder_output'][0]
+        pred_phon = tf.nn.log_softmax(pred_phon)
+        iphon_tar = model.text_pipeline.tokenizer.decode(phonemes[j][:phon_len[j]])
+        iphon_tar = iphon_tar.split()
+        
+        char_list = [''] +list(model.text_pipeline.tokenizer.idx_to_token.values())
+        config = CtcSegmentationParameters(char_list=char_list)
+        config.index_duration = 0.0115545
+        
+        text = [phonemes[j][:phon_len[j]]]
+        ground_truth_mat, utt_begin_indices = prepare_token_list(config, text)
+        timings, char_probs, state_list = ctc_segmentation(config, pred_phon.numpy(), ground_truth_mat)
+        utt_begin_indices = list(range(2, len(timings)))
+        segments = determine_utterance_segments(
+            config, utt_begin_indices, char_probs, timings, text[0]
+        )
 
-    char_list = [''] +list(model.text_pipeline.tokenizer.idx_to_token.values())
-    config = CtcSegmentationParameters(char_list=char_list)
-    config.index_duration = 0.0115545
-    
-    text = [phonemes[j][:phon_len[j]].numpy()]
-    ground_truth_mat, utt_begin_indices = prepare_token_list(config, text)
-    timings, char_probs, state_list = ctc_segmentation(config, pred_phon.numpy(), ground_truth_mat)
-    utt_begin_indices = list(range(2, len(timings)))
-    segments = determine_utterance_segments(
-        config, utt_begin_indices, char_probs, timings, text[0]
-    )
+        tg = tgt.core.TextGrid('haa')
+        tier = tgt.core.IntervalTier(name='phonemes')
 
-    tg = tgt.core.TextGrid('haa')
-    tier = tgt.core.IntervalTier(name='phonemes')
-    itv = tgt.core.Interval(0, segments[0][0], text='sp')
-    tier.add_interval(itv)
-    itv = tgt.core.Interval(segments[-1][1], timings[-1], text='sp')
-    tier.add_interval(itv)
+        if(segments[0][-1]<-0.001):
+            segments[0] = (0, segments[0][1], segments[0][2])
+        else:
+            itv = tgt.core.Interval(0, segments[0][0], text='sp')
+            tier.add_interval(itv)
 
-    for i, seg in enumerate(segments):
-        itv = tgt.core.Interval(seg[0], seg[1], text=iphon_tar.split()[i])
-        tier.add_interval(itv)
+        if(segments[-1][-1]<-0.001):
+            segments[-1] = (segments[-1][0], segments[-1][1]+0.15, segments[-1][2])
+            if(segments[-1][1]>mel_len[j]*config.index_duration):
+                pass
+            else:
+                itv = tgt.core.Interval(segments[-1][1], mel_len[j]*config.index_duration, text='sp') #mel_len[j]*config.index_duration
+                tier.add_interval(itv)
 
-    tg.add_tier(tier)
-    tgt.io.write_to_file(tg, "test.textgrid", format='long')
-    break
+        for i, seg in enumerate(segments):
+            itv = tgt.core.Interval(seg[0], seg[1], text=iphon_tar[i])
+            tier.add_interval(itv)
+
+        tg.add_tier(tier)
+        tgt.io.write_to_file(tg, f"textgrid/{fname[j].numpy().decode()}.textgrid", format='long')
+        # break
 
 print('Done.')
