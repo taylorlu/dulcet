@@ -56,7 +56,7 @@ def validate(model,
              summary_manager):
     val_loss = {'loss': 0.}
     norm = 0.
-    for mel, phonemes, durations, spk_emb, fname in val_dataset.all_batches():
+    for phonemes, mel, durations, spk_emb, fname in val_dataset.all_batches():
         model_out = model.val_step(input_sequence=phonemes,
                                    target_sequence=mel,
                                    target_durations=durations,

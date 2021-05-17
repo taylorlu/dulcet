@@ -113,7 +113,7 @@ class Phonemizer:
 
 
 if(__name__=='__main__'):
-    phonemer = Phonemizer('data/text/lexicon/librispeech-lexicon.txt', 'data/text/lexicon/librispeech-lexicon.txt')
+    phonemer = Phonemizer('data/text/lexicon/librispeech-lexicon.txt', 'data/text/lexicon/pinyin-lexicon-r.txt')
     phones = phonemer.preprocess_english('Internally DSAlign uses the DeepSpeech STT engine. For it to be able to function, it requires')
     print(phones)
     phones = phonemer.preprocess_mandarin('新增较多镜头，详见平面稿及附件')
