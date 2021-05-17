@@ -116,7 +116,7 @@ class Config:
         if not ignore_hash:
             self._check_hash()
         if self.model_kind == 'asr':
-            return ASREncoder(english_lexicon_path=self.config['pinyin_lexicon'], 
+            return ASREncoder(english_lexicon_path=self.config['english_lexicon'], 
                               pinyin_lexicon_path=self.config['pinyin_lexicon'],
                               mel_channels=self.config['mel_channels'],
                               spk_count=len(self.spk_dict),
@@ -132,7 +132,7 @@ class Config:
                               debug=self.config['debug'])
         
         else:
-            return ForwardTransformer(english_lexicon_path=self.config['pinyin_lexicon'], 
+            return ForwardTransformer(english_lexicon_path=self.config['english_lexicon'], 
                                       pinyin_lexicon_path=self.config['pinyin_lexicon'],
                                       encoder_model_dimension=self.config['encoder_model_dimension'],
                                       decoder_model_dimension=self.config['decoder_model_dimension'],
