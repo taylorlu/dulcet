@@ -14,28 +14,27 @@ import pickle
 class DataReader:
     """
     Reads dataset folder and constructs three useful objects:
-        text_dict: {filename: fullpath, data_type, text} when create data
-                   {filename: text}                      when training
+        text_dict: {filename: fullpath, data_type, speaker, text} when create data
+                   {filename: speaker, text}                      when training
         filenames: [filename1, filename2, ...]
         
     IMPORTANT: Use only for information available from source dataset, not for
     training data.
     """
     
-    def __init__(self, wav_directory: List, metadata_path: str, metadata_reading_function=None, 
+    def __init__(self, audio_directory: List, metadata_path: str, metadata_reading_function=None, 
                  training=False, is_processed=False):
         self.metadata_reading_function = metadata_reading_function
-        self.wav_directory = wav_directory
+        self.audio_directory = audio_directory
         if not is_processed:
             self.text_dict = {}
-            for dataset in self.wav_directory:
+            for dataset in self.audio_directory:
                 dataset_dir, data_type = dataset
                 reader = get_preprocessor_by_name(data_type)
                 self.text_dict.update(reader(dataset_dir))
-            self.filenames = list(self.text_dict.keys())
         else:
             self.text_dict = self.metadata_reading_function(Path(metadata_path))
-            self.filenames = list(self.text_dict.keys())
+        self.filenames = list(self.text_dict.keys())
 
     @classmethod
     def from_config(cls, config_manager: Config, kind: str):
@@ -57,7 +56,7 @@ class DataReader:
         elif kind == 'phonemized':
             metadata = config_manager.phonemized_metadata_path
         
-        return cls(wav_directory=config_manager.wav_directory,
+        return cls(audio_directory=config_manager.audio_directory,
                    metadata_reading_function=reader,
                    metadata_path=metadata,
                    training=training,

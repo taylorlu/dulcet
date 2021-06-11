@@ -30,7 +30,7 @@ class Config:
         self.session_names['asr'] = f"{asr_config_name}.{self.session_names['data']}"
         self.session_names['tts'] = f"{tts_config_name}.{asr_config_name}"
         # create paths
-        self.wav_directory = self.config['wav_directory']
+        self.audio_directory = self.config['audio_directory']
         self.data_type = self.config['data_type']
         self.data_dir = Path(f"{self.config['train_data_directory']}.{self.data_name}")
         self.base_dir = Path(self.config['log_directory']) / self.data_name / self.session_names[model_kind]

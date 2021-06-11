@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow.core.framework.graph_pb2 import GraphDef
 import numpy as np
 from tqdm import trange
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
 from utils.logging_utils import SummaryManager
 from data.text import TextToTokens
@@ -33,28 +33,26 @@ cm.create_remove_dirs()
 metadatareader = DataReader.from_config(cm, kind='original')
 summary_manager = SummaryManager(model=None, log_dir=cm.log_dir / 'data_preprocessing', config=cm.config,
                                  default_writer='data_preprocessing')
-print(f'\nFound {len(metadatareader.filenames)} wavfiles.')
+print(f'\nFound {len(metadatareader.filenames)} audio files.')
 audio = Audio(config=cm.config)
 
-# y, sr = audio.load_wav(r'E:\TTSDataset\LibriTTS\train-clean-360\4595\45218\4595_45218_000016_000005.wav')
-# librosa.output.write_wav('test.wav', y, sr)
 
 if not args.skip_mels:
     len_dict = {}
     remove_files = []
     mel_lens = []
 
-    def process_wav(wav_tuples):
-        for idx in trange(len(wav_tuples), desc=''):
-            fullpath, data_type, spk_name, _ = wav_tuples[idx]
+    def process_file(tuples):
+        for idx in trange(len(tuples), desc=''):
+            file_name, fullpath, data_type, spk_name, _ = tuples[idx]
 
-            file_name = fullpath.stem
             _, trim_type = cm.data_type[data_type]
             try:
-                y, sr = audio.load_wav(str(fullpath), trim_center_vad=trim_type=='trimcentervad')
+                y, sr = audio.load_file(str(fullpath), trim_center_vad=trim_type=='trimcentervad')
             except Exception as e:
                 remove_files.append(file_name)
                 continue
+
             mel = audio.mel_spectrogram(y)
             assert mel.shape[1] == audio.config['mel_channels'], len(mel.shape) == 2
 
@@ -69,22 +67,21 @@ if not args.skip_mels:
     
     print(f"\nMels will be stored stored under")
     print(f"{cm.mel_dir}")
-    
-    wav_tuples = list(metadatareader.text_dict.values())
+    tuples = []
     len_dict = {}
     remove_files = []
     mel_lens = []
 
     poolsize = 4
-    piecesize = len(wav_tuples)//poolsize
-    wav_inputs = []
+    piecesize = len(tuples)//poolsize
+    inputs = []
 
     for i in range(poolsize):
-        wav_inputs.append(wav_tuples[piecesize*i:piecesize*(i+1)])
-    wav_inputs[-1].extend(wav_tuples[piecesize*(i+1):])
+        inputs.append(tuples[piecesize*i:piecesize*(i+1)])
+    inputs[-1].extend(tuples[piecesize*(i+1):])
 
-    with ThreadPoolExecutor() as p:
-        p.map(process_wav, wav_inputs)
+    with ProcessPoolExecutor() as p:
+        p.map(process_file, inputs)
 
     pickle.dump(len_dict, open(cm.data_dir / 'mel_len.pkl', 'wb'))
     pickle.dump(remove_files, open(cm.data_dir / 'under-over_sized_mels.pkl', 'wb'))
@@ -105,12 +102,13 @@ if not args.skip_phonemes:
     wav_tuples = metadatareader.text_dict.values()
     for wav_tuple in wav_tuples:
         fullpath, _, _, text = wav_tuple
-        if len(text) < 3:
-            filter_metadata.append(fullpath.stem)
+        for char in text:
+            if(char in ['0','1','2','3','4','5','6','7','8','9','$',"%","@",'+']):
+                filter_metadata.append(fullpath)
     if len(filter_metadata) > 0:
         print(f'Removing {len(filter_metadata)} suspiciously short line(s):')
         for fname in filter_metadata:
-            print(f'{fname}: {metadatareader.text_dict[fname][-1]}')
+            print(f'{fname}')
     print(f'\nRemoving {len(remove_files)} line(s) due to mel filtering.')
     remove_files += filter_metadata
     metadata_file_ids = [fname for fname in metadatareader.text_dict.keys() if fname not in remove_files]
@@ -138,14 +136,17 @@ if not args.skip_phonemes:
             file_id = file_ids[idx]
             _, data_type, speaker, text = metadatareader.text_dict[file_id]
 
-            try:
-                language, _ = cm.data_type[data_type]
-                phonemes = text_proc.phonemizer(text, language=language)
-            except Exception as e:
-                print(f'{e}\nFile id {file_id}')
-                continue
+            if(len(text)!=0):
+                try:
+                    language, _ = cm.data_type[data_type]
+                    phonemes = text_proc.phonemizer(text, language=language)
+                except Exception as e:
+                    print(f'{e}\nFile id {file_id}')
+                    continue
+                phonemized_dict.update({file_id: '|'.join([speaker, phonemes])})
+            else:
+                phonemized_dict.update({file_id: '|'.join([speaker, ''])})
 
-            phonemized_dict.update({file_id: '|'.join([speaker, phonemes])})
         return phonemized_dict
     
     print('\nPHONEMIZING')
@@ -159,7 +160,7 @@ if not args.skip_phonemes:
         metadata_file_inputs.append(metadata_file_ids[piecesize*i:piecesize*(i+1)])
     metadata_file_inputs[-1].extend(metadata_file_ids[piecesize*(i+1):])
 
-    with ThreadPoolExecutor() as p:
+    with ProcessPoolExecutor() as p:
         procs = p.map(process_phonemes, metadata_file_inputs)
         for proc in procs:
             phonemized_data.update(proc)

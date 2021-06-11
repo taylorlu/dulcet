@@ -1,16 +1,22 @@
 # PATHS: change accordingly
-# paths to directory cointaining the wavs
-wav_directory: 
+# paths to directory cointaining the audio files, such as wav, flac, m4a, mp3, aac...
+audio_directory:
   - ['E:/TTSDataset/data_aishell', 'aishell']
   - ['E:/TTSDataset/data_aishell3', 'aishell3']
   - ['E:/TTSDataset/VCTK-Corpus', 'vctk']
   - ['E:/TTSDataset/LibriTTS', 'libritts_360']
+  - ['/root/mydata/LibriSpeech', 'librispeech']
+  - ['/root/mydata/train', 'magicdata']
+  - ['/root/mydata/vox2', 'vox2celeb']
 
 data_type:
   aishell: ['mandarin', 'trimnone'] # 'trimcentervad'
   aishell3: ['pinyin', 'trimnone']  # 'trimcentervad'
   vctk: ['english', 'trimnone']
   libritts_360: ['english', 'trimnone']
+  librispeech: ['english', 'trimnone']
+  magicdata: ['mandarin', 'trimnone']
+  vox2celeb: ['', 'trimnone']
 
 english_lexicon: './data/text/lexicon/librispeech-lexicon.txt'
 pinyin_lexicon: './data/text/lexicon/pinyin-lexicon-r.txt'

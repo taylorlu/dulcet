@@ -64,9 +64,10 @@ class Phonemizer:
                 phones += self.english_lexicon[w.lower()]
             else:
                 phones += list(filter(lambda p: p != " ", self.g2p(w)))
-        phones = "{" + "}{".join(phones) + "}"
-        phones = re.sub(r"\{[^\w\s]?\}", "{sp}", phones)
-        phones = phones.replace("}{", " ")
+        # phones = "{" + "}{".join(phones) + "}"
+        # phones = re.sub(r"\{[^\w\s]?\}", "{sp}", phones)
+        # phones = phones.replace("}{", " ")
+        phones = re.sub(r"\{[^\w\s]?\}", "", ' '.join(phones))
 
         return phones
 
@@ -81,10 +82,10 @@ class Phonemizer:
         for p in pinyins:
             if p in self.pinyin_lexicon:
                 phones += self.pinyin_lexicon[p]
-            else:
-                phones.append("sp")
+            # else:
+            #     phones.append("sp")
 
-        phones = "{" + " ".join(phones) + "}"
+        phones = " ".join(phones)
         return phones
 
     def preprocess_pinyin(self, text):
@@ -93,10 +94,10 @@ class Phonemizer:
         for p in pinyins:
             if p in self.pinyin_lexicon:
                 phones += self.pinyin_lexicon[p]
-            else:
-                phones.append("sp")
+            # else:
+            #     phones.append("sp")
 
-        phones = "{" + " ".join(phones) + "}"
+        phones = " ".join(phones)
         return phones
 
     def __call__(self, text: Union[str, list], language=None) -> Union[str, list]:

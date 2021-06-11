@@ -9,6 +9,8 @@
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
+import os
+import random
 
 
 def get_files(path: Union[Path, str], extension='.wav') -> List[Path]:
@@ -129,6 +131,79 @@ def aishell(dataset_dir: str) -> dict:
     return text_dict
 
 
+def vox2celeb(dataset_dir: str) -> dict:
+    text_dict = {}
+
+    all_m4as = get_files(Path(dataset_dir), extension='.m4a')
+    m4a_paths = {w.parts[-3]+'_'+w.stem: w for w in all_m4as}
+
+    for name in m4a_paths.keys():
+        text_dict[name] = (m4a_paths[name], 'vox2celeb', 'vox2celeb_'+name.split('_')[0], "")
+
+    ## filtered the vox2celeb, only keep 100 audio files per person.
+    spkbase_dict = {}
+    for key, value in text_dict.items():
+        if(value[2] not in spkbase_dict):
+            spkbase_dict[value[2]] = [(key, value[0], value[1], value[2], value[3])]
+        else:
+            spkbase_dict[value[2]].append((key, value[0], value[1], value[2], value[3]))
+
+    for spk in spkbase_dict.keys():
+        random.shuffle(spkbase_dict[spk])
+        spkbase_dict[spk] = spkbase_dict[spk][:75]
+
+    text_dict = {}
+    for spk, values in spkbase_dict.items():
+        for value in values:
+            text_dict[value[0]] = (value[1], value[2], value[3], value[4])
+
+    return text_dict
+
+
+def magicdata(dataset_dir: str) -> dict:
+    text_dict = {}
+
+    label_path = Path(dataset_dir) / 'TRANS.txt'
+    labelfile = open(str(label_path), encoding='utf-8')
+
+    all_wavs = get_files(Path(dataset_dir), extension='.wav')
+    wav_paths = {w.stem: w for w in all_wavs}
+
+    while(True):
+        line = labelfile.readline().strip()
+        if(line==None or len(line)<1):
+            break
+
+        tokens = line.split()
+        name = tokens[0].split('.')[0]
+        if(name in wav_paths.keys()):
+            text_dict[name] = (wav_paths[name], 'magicdata', 'magicdata_'+tokens[1], tokens[2])
+
+    return text_dict
+
+
+def librispeech(dataset_dir: str) -> dict:
+    text_dict = {}
+
+    all_txts = get_files(Path(dataset_dir), extension='.txt')
+    for txt in all_txts:
+        labelfile = open(str(txt), encoding='utf-8')
+
+        while(True):
+            line=labelfile.readline().strip()
+            if(line==None or len(line)<1):
+                break
+
+            tokens = line.split()
+            flacname = tokens[0]
+            fullpath = txt.parent / (flacname+'.flac')
+            if(fullpath.is_file()):
+                text = ' '.join(tokens[1:])
+                text_dict[flacname] = (str(fullpath), 'librispeech', 'librispeech_'+flacname.split('-')[0], text)
+
+    return text_dict
+
+
 def post_processed_reader(metadata_path: str, column_sep='|') -> Tuple[
     Dict, List]:
     """
@@ -145,12 +220,14 @@ def post_processed_reader(metadata_path: str, column_sep='|') -> Tuple[
 
 
 if __name__ == '__main__':
-    metadata_path = '/Volumes/data/datasets/LJSpeech-1.1/metadata.csv'
-    d = get_preprocessor_by_name('ljspeech')(metadata_path)
-    key_list = list(d.keys())
-    print('metadata head')
-    for key in key_list[:5]:
-        print(f'{key}: {d[key]}')
-    print('metadata tail')
-    for key in key_list[-5:]:
-        print(f'{key}: {d[key]}')
+    # metadata_path = '/Volumes/data/datasets/LJSpeech-1.1/metadata.csv'
+    # d = get_preprocessor_by_name('ljspeech')(metadata_path)
+    # key_list = list(d.keys())
+    # print('metadata head')
+    # for key in key_list[:5]:
+    #     print(f'{key}: {d[key]}')
+    # print('metadata tail')
+    # for key in key_list[-5:]:
+    #     print(f'{key}: {d[key]}')
+
+    print(librispeech(r'D:\aiJobs\000\LibriSpeech'))

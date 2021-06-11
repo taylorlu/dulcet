@@ -76,8 +76,8 @@ class Audio():
         f.add_subplot(ax)
         return f
     
-    def load_wav(self, wav_path, trim_center_vad=False):
-        y, sr = librosa.load(wav_path, sr=self.config['sampling_rate'])
+    def load_file(self, path, trim_center_vad=False):
+        y, sr = librosa.load(path, sr=self.config['sampling_rate'])
         if self.config['trim_long_silences']:
             y = self.trim_long_silences(y)
         if self.config['trim_silence']:
