@@ -68,10 +68,6 @@ if not args.skip_mels:
     print(f"\nMels will be stored stored under")
     print(f"{cm.mel_dir}")
     tuples = []
-    len_dict = {}
-    remove_files = []
-    mel_lens = []
-
     poolsize = 4
     piecesize = len(tuples)//poolsize
     inputs = []
