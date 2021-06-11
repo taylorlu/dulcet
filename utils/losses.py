@@ -62,7 +62,9 @@ def masked_binary_crossentropy(targets: tf.Tensor, logits: tf.Tensor, mask_value
 
 
 def ctc_loss(y_true, y_pred, label_length, input_length, blank=None):
-    return tf.nn.ctc_loss(
+    mask = tf.math.logical_not(tf.math.equal(label_length, 0))
+    mask = tf.cast(mask, dtype=tf.float32)
+    return mask * tf.nn.ctc_loss(
         labels=tf.cast(y_true, tf.int32),
         logits=tf.cast(y_pred, tf.float32),
         label_length=tf.cast(label_length, tf.int32),

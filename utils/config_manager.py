@@ -45,15 +45,14 @@ class Config:
         mel_len_file = Path(self.data_dir) / 'mel_len.pkl'
         if(mel_len_file.is_file()):
             self.mel_len = pickle.load(open(mel_len_file, 'rb'))
+
+        spk_file = Path(self.data_dir) / 'spk.pkl'
+        if(spk_file.is_file()):
+            self.name_spk = pickle.load(open(spk_file, 'rb'))
             speakers = set()
 
-            for key in self.mel_len:
-                if(key.startswith('SSB')):
-                    speakers.add(key[:7])
-                elif(key.startswith('BAC')):
-                    speakers.add(key[6:11])
-                else:
-                    speakers.add(key.split('_')[0])
+            for _, spk in self.name_spk.items():
+                speakers.add(spk)
             speakers = sorted(list(speakers))
             self.spk_dict = {k: v for v, k in enumerate(speakers)}
 
