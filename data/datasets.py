@@ -63,37 +63,6 @@ class DataReader:
                    is_processed=is_processed)
 
 
-class ASRPreprocessor:
-    def __init__(self, 
-                 spk_dict: dict,
-                 mel_channels: int, 
-                 tokenizer: Tokenizer):
-        self.output_types = (tf.int32, tf.float32, tf.int32, tf.int32, tf.int32, tf.string)
-        self.padded_shapes = ([], [None, mel_channels], [None], [], [], [])
-        self.tokenizer = tokenizer
-        self.spk_dict = spk_dict
-    
-    def __call__(self, mel, text, sample_name):
-        encoded_phonemes = self.tokenizer(text)
-        if(sample_name.startswith('SSB')):
-            spk = self.spk_dict[sample_name[:7]]
-        elif(sample_name.startswith('BAC')):
-            spk = self.spk_dict[sample_name[6:11]]
-        else:
-            spk = self.spk_dict[sample_name.split('_')[0]]
-
-        return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
-    
-    def get_sample_length(self, spk, mel, encoded_phonemes, mel_len, phon_len, sample_name):
-        return tf.shape(mel)[0]
-    
-    @classmethod
-    def from_config(cls, config: Config, tokenizer: Tokenizer):
-        return cls(mel_channels=config.config['mel_channels'],
-                   spk_dict=config.spk_dict,
-                   tokenizer=tokenizer)
-
-
 class ASRDataset:
     def __init__(self,
                  data_reader: DataReader,
@@ -110,7 +79,7 @@ class ASRDataset:
     def _read_sample(self, sample_name: str):
         spk, text = self.metadata_reader.text_dict[sample_name]
         mel = np.load((self.mel_directory / spk / sample_name).with_suffix('.npy').as_posix())
-        encoded_phonemes = self.tokenizer(text[1:-1])
+        encoded_phonemes = self.tokenizer(text)
         spk = self.spk_dict[spk]
         return spk, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
     
