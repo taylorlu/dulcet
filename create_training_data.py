@@ -38,14 +38,12 @@ audio = Audio(config=cm.config)
 
 
 if not args.skip_mels:
-    len_dict = {}
-    remove_files = []
-    mel_lens = []
-
     def process_file(tuples):
+        len_dict = {}
+        spk_file_dict = {}
+        remove_files = []
         for idx in trange(len(tuples), desc=''):
             file_name, fullpath, data_type, spk_name, _ = tuples[idx]
-
             _, trim_type = cm.data_type[data_type]
             try:
                 y, sr = audio.load_file(str(fullpath), trim_center_vad=trim_type=='trimcentervad')
@@ -55,19 +53,23 @@ if not args.skip_mels:
 
             mel = audio.mel_spectrogram(y)
             assert mel.shape[1] == audio.config['mel_channels'], len(mel.shape) == 2
-
-            len_dict.update({file_name: mel.shape[0]})
+            
             if mel.shape[0] > cm.config['max_mel_len'] or mel.shape[0] < cm.config['min_mel_len']:
                 remove_files.append(file_name)
             else:
-                mel_lens.append(mel.shape[0])
+                len_dict.update({file_name: mel.shape[0]})
+                spk_file_dict.update({file_name: spk_name})
                 os.makedirs(str(cm.mel_dir / spk_name), exist_ok=True)
                 mel_path = (cm.mel_dir / spk_name / file_name).with_suffix('.npy')
                 np.save(str(mel_path), mel)
-    
+        return len_dict, spk_file_dict, remove_files
+
     print(f"\nMels will be stored stored under")
     print(f"{cm.mel_dir}")
     tuples = []
+    for key, value in metadatareader.text_dict.items():
+        tuples.append((key, value[0], value[1], value[2], value[3]))
+
     poolsize = 4
     piecesize = len(tuples)//poolsize
     inputs = []
@@ -76,16 +78,20 @@ if not args.skip_mels:
         inputs.append(tuples[piecesize*i:piecesize*(i+1)])
     inputs[-1].extend(tuples[piecesize*(i+1):])
 
+    len_dict = {}
+    spk_file_dict = {}
+    remove_files = []
     with ProcessPoolExecutor() as p:
-        p.map(process_file, inputs)
+        procs = p.map(process_file, inputs)
+        for proc in procs:
+            dict1, dict2, list3 = proc
+            len_dict.update(dict1)
+            spk_file_dict.update(dict2)
+            remove_files.extend(list3)
 
     pickle.dump(len_dict, open(cm.data_dir / 'mel_len.pkl', 'wb'))
+    pickle.dump(spk_file_dict, open(cm.data_dir / 'spk_file.pkl', 'wb'))
     pickle.dump(remove_files, open(cm.data_dir / 'under-over_sized_mels.pkl', 'wb'))
-    summary_manager.add_histogram('Mel Lengths', values=np.array(mel_lens))
-    total_mel_len = np.sum(mel_lens)
-    total_wav_len = total_mel_len * audio.config['hop_length']
-    summary_manager.display_scalar('Total duration (hours)',
-                                   scalar_value=total_wav_len / audio.config['sampling_rate'] / 60. ** 2)
 
 
 if not args.skip_phonemes:
@@ -107,6 +113,7 @@ if not args.skip_phonemes:
             print(f'{fname}')
     print(f'\nRemoving {len(remove_files)} line(s) due to mel filtering.')
     remove_files += filter_metadata
+    remove_files = set(remove_files)
     metadata_file_ids = [fname for fname in metadatareader.text_dict.keys() if fname not in remove_files]
     metadata_len = len(metadata_file_ids)
     sample_items = np.random.choice(metadata_file_ids, 20)
