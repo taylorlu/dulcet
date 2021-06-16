@@ -42,18 +42,10 @@ class Config:
         self.mel_dir = self.data_dir / f"mels.{self.config['audio_settings_name']}"
         self.duration_dir = self.data_dir / f"durations.{self.config['audio_settings_name']}"
 
-        mel_len_file = Path(self.data_dir) / 'mel_len.pkl'
-        if(mel_len_file.is_file()):
-            self.mel_len = pickle.load(open(mel_len_file, 'rb'))
-
-        spk_file = Path(self.data_dir) / 'spk.pkl'
+        spk_file = Path(self.data_dir) / 'spk_file.pkl'
         if(spk_file.is_file()):
-            self.name_spk = pickle.load(open(spk_file, 'rb'))
-            speakers = set()
-
-            for _, spk in self.name_spk.items():
-                speakers.add(spk)
-            speakers = sorted(list(speakers))
+            spk_dict = pickle.load(open(spk_file, 'rb'))
+            speakers = sorted(set(spk_dict.values()))
             self.spk_dict = {k: v for v, k in enumerate(speakers)}
 
         # training parameters
