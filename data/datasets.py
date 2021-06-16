@@ -133,7 +133,7 @@ class MelDurDataset:
     def _read_sample(self, sample_name: str):
         spk_name, text = self.metadata_reader.text_dict[sample_name]
         mel = np.load((self.mel_directory / spk_name / sample_name).with_suffix('.npy').as_posix())
-        encoded_phonemes = self.tokenizer(text[1:-1])
+        encoded_phonemes = self.tokenizer(text)
         return spk_name, mel, encoded_phonemes, mel.shape[0], len(encoded_phonemes), sample_name
     
     def get_sample_length(self, spk_name, mel, encoded_phonemes, mel_len, phon_len, sample_name):
@@ -179,7 +179,7 @@ class TTSPreprocessor:
         self.tokenizer = tokenizer
     
     def __call__(self, text, mel, durations, spk_emb, sample_name):
-        encoded_phonemes = self.tokenizer(text[1:-1]) ##{y ie4 w an3}s
+        encoded_phonemes = self.tokenizer(text)
         return encoded_phonemes, mel, durations, spk_emb, sample_name
     
     def get_sample_length(self, encoded_phonemes, mel, durations, spk_emb, sample_name):
