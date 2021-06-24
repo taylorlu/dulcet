@@ -101,8 +101,13 @@ class Audio():
         if(trim_center_vad):
             slices = librosa.effects.split(wav, top_db=self.config['trim_silence_top_db'])
             trimcenter = []
-            for slice in slices:
-                trim = wav[slice[0]:slice[1]]
+            for i, slice in enumerate(slices):
+                if(i==0):
+                    trim = wav[0:slice[1]]
+                elif(i==len(slices)-1):
+                    trim = wav[slice[0]:]
+                else:
+                    trim = wav[slice[0]:slice[1]]
                 trimcenter.append(trim)
             trimmed = np.concatenate(trimcenter, axis=-1)
         else:
