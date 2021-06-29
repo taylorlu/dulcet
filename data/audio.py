@@ -101,11 +101,18 @@ class Audio():
         if(trim_center_vad):
             slices = librosa.effects.split(wav, top_db=self.config['trim_silence_top_db'])
             trimcenter = []
+            sil_length = int(self.config['sil_length']*self.config['sampling_rate']/1000)
             for i, slice in enumerate(slices):
                 if(i==0):
-                    trim = wav[0:slice[1]]
+                    if(slice[0]>sil_length):
+                        trim = wav[slice[0]-sil_length:slice[1]]
+                    else:
+                        trim = wav[slice[0]:slice[1]]
                 elif(i==len(slices)-1):
-                    trim = wav[slice[0]:]
+                    if(wav.shape[0]-slice[1]>sil_length):
+                        trim = wav[slice[0]:slice[1]+sil_length]
+                    else:
+                        trim = wav[slice[0]:slice[1]]
                 else:
                     trim = wav[slice[0]:slice[1]]
                 trimcenter.append(trim)

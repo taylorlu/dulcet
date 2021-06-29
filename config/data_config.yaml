@@ -31,3 +31,4 @@ vad_window_length: 30      # In milliseconds
 vad_moving_average_width: 8
 vad_max_silence_length: 12
 vad_sample_rate: 16000
+sil_length: 200  # fixed pause length in milliseconds
